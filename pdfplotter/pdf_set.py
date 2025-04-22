@@ -7,7 +7,7 @@ import pandas as pd
 import sympy as sp
 from typing_extensions import Literal
 
-from pdfplotter.flavors import flavors_nucleus, isospin_transform
+from pdfplotter.flavors import flavors_nucleus, isospin_transform, pid_from_flavor
 
 idx = pd.IndexSlice
 
