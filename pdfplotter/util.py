@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import numpy as np
 import sympy as sp
-from elements import _pubchem_elements
 
+from pdfplotter.elements import _pubchem_elements
 from pdfplotter.flavors import *
 
 
