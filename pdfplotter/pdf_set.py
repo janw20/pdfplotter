@@ -1,0 +1,500 @@
+from __future__ import annotations
+
+import lhapdf
+import numpy as np
+import numpy.typing as npt
+import pandas as pd
+import sympy as sp
+from typing_extensions import Literal
+
+from pdfplotter.flavors import flavors_nucleus, isospin_transform
+
+idx = pd.IndexSlice
+
+
+class PDFSet:
+    """Wrapper of the LHAPDF PDFSet class, including the calculation of observables, ratios, and their uncertainties."""
+
+    _name: str
+    _pdf_set: lhapdf.PDFSet
+    _pdfs: list[lhapdf.PDF]
+    _data: pd.DataFrame
+    """DataFrame with index `(Q, member, x) ∈ Q_values × {0, ..., len(_pdfs)} × x_values` and columns `flavor ∈ {"d", "d̅", "d bound", ...}`"""
+    _observables: pd.DataFrame
+    """DataFrame with index `(pdf_type, Q, x) ∈ {"central", "unc+", "unc-"} × Q_values × x_values` and columns `observable ∈ {"u/d", "u/d bound", "u_v", ...}`"""
+    _ratios: pd.DataFrame
+    """DataFrame with index `(pdf_type, Q, x) ∈ {"central", "unc+", "unc-"} × Q_values × x_values` and columns `observable ∈ {"u/d <denominator PDFSet name>", ...}`"""
+    _A: int
+    _Z: int
+    _construct_full_nuclear_pdfs: bool
+    _confidence_level: float
+    _uncertainty_type: str
+
+    def __init__(
+        self,
+        name: str,
+        x: npt.ArrayLike,
+        Q: npt.ArrayLike | None = None,
+        Q2: npt.ArrayLike | None = None,
+        A=1,
+        Z=1,
+        construct_full_nuclear_pdfs=False,
+        confidence_level: float = 90,
+    ) -> None:
+        """Constructs a PDFSet object.
+
+        Parameters
+        ----------
+        name : str
+            The name of the LHAPDF set to load.
+        x : numpy.ArrayLike
+            The momentum fraction values at which the PDFs are evaluated.
+        Q : numpy.ArrayLike, optional
+            The scale values at which the PDFs are evaluated. Either `Q` or `Q2` must be given.
+        Q2 : numpy.ArrayLike, optional
+            The Q² (squared scale) values at which the PDFs are evaluated. Either `Q` or `Q2` must be given.
+        A : int, optional
+            Mass number of the nucleus for nuclear PDFs, by default 1 (proton PDFs)
+        Z : int, optional
+            Charge number of the nucleus for nuclear PDFs, by default 1 (proton PDFs)
+        construct_full_nuclear_pdfs : bool, optional
+            True if full nuclear PDFs should be constructed using `xf^A = Z/A * xf^(p/A) + (A - Z)/A * xf^(n/A). Only use this if the LHAPDF set you are loading does not already load full nuclear PDFs. By default False.
+        confidence_level : float, optional
+            The confidence level in percent at which the uncertainties are calculated. By default 90.
+        """
+        if Q is None:
+            if Q2 is None:
+                raise ValueError("Either Q or Q2 must be given")
+            Q = np.sqrt(Q2)
+        elif Q is not None and Q2 is not None:
+            raise ValueError("Only one of Q or Q2 must be given")
+
+        if construct_full_nuclear_pdfs and A == 1:
+            raise ValueError("A must be greater than 1 for full nuclear PDFs")
+        if Z > A:
+            raise ValueError("Z must be less than or equal to A")
+        self._name = name
+
+        # need to check ourselves if the PDF set is available, otherwise the notebook kernel crashes
+        if not name in lhapdf.availablePDFSets():
+            raise FileNotFoundError(
+                f"PDF set {name} was not found or has missing info file"
+            )
+
+        self._pdf_set = lhapdf.getPDFSet(self.name)
+        self._pdfs = self.pdf_set.mkPDFs()
+        self._A = A
+        self._Z = Z
+        self._construct_full_nuclear_pdfs = construct_full_nuclear_pdfs
+        self._confidence_level = (
+            confidence_level if confidence_level else self.pdf_set.errorConfLevel
+        )
+        self._uncertainty_type = self.pdf_set.errorType
+
+        Q_values = np.atleast_1d(Q)
+        x_values = np.atleast_1d(x)
+        self._data = pd.DataFrame(
+            index=pd.MultiIndex.from_product(
+                [Q_values, np.arange(self._pdf_set.size), x_values],
+                names=["Q", "member", "x"],
+            )
+        ).sort_index()
+        pdf_types = ["central", "unc_asym_+", "unc_asym_-", "unc_sym_+", "unc_sym_-"]
+        self._observables = pd.DataFrame(
+            index=pd.MultiIndex.from_product(
+                [pdf_types, Q_values, x_values], names=["pdf_type", "Q", "x"]
+            ).sort_values()
+        )
+        self._ratios = pd.DataFrame(
+            index=pd.MultiIndex.from_product(
+                [pdf_types, Q_values, x_values], names=["pdf_type", "Q", "x"]
+            ).sort_values()
+        )
+
+    @property
+    def name(self) -> str:
+        """The name of the LHAPDF set."""
+        return self._name
+
+    @property
+    def pdf_set(self) -> lhapdf.PDFSet:
+        """The LHAPDF set."""
+        return self._pdf_set
+
+    @property
+    def pdfs(self) -> list[lhapdf.PDF]:
+        """The PDFs in the LHAPDF set."""
+        return self._pdfs
+
+    @property
+    def A(self) -> int:
+        """The mass number of the nucleus. 1 for proton PDFs."""
+        return self._A
+
+    @property
+    def Z(self) -> int:
+        """The charge number of the nucleus. 1 for proton PDFs."""
+        return self._Z
+
+    @property
+    def has_full_nuclear_pdfs(self) -> bool:
+        """True if the LHAPDF set contains full nuclear PDFs, False if it contains proton or bound proton PDFs."""
+        return self._construct_full_nuclear_pdfs
+
+    @property
+    def has_bound_proton_pdfs(self) -> bool:
+        """True if the LHAPDF set contains bound proton PDFs, False if it contains full nuclear PDFs or proton PDFs."""
+        return self.A != 1 and not self.has_full_nuclear_pdfs
+
+    @property
+    def confidence_level(self) -> float:
+        """The confidence level of the uncertainties."""
+        return self._confidence_level
+
+    @property
+    def uncertainty_type(self) -> str:
+        """The type of the uncertainties."""
+        return self._uncertainty_type
+
+    @property
+    def x_values(self) -> npt.NDArray[np.floating]:
+        """The momentum fraction values at which the PDFs are evaluated."""
+        return self._data.index.get_level_values("x").unique().to_numpy()
+
+    @property
+    def Q_values(self) -> npt.NDArray[np.floating]:
+        """The scale values at which the PDFs are evaluated."""
+        return self._data.index.get_level_values("Q").unique().to_numpy()
+
+    @property
+    def Q2_values(self) -> npt.NDArray[np.floating]:
+        """The squared scale values at which the PDFs are evaluated."""
+        return self.Q_values**2
+
+    def _check_and_load_flavors(self, term: sp.Basic) -> None:
+        """Checks if the PDF flavors in `term` are already stored in `_data` and loads them if not. Bound proton PDFs are appended by \"bound\".
+
+        Parameters
+        ----------
+        term : sympy.Basic
+            The term to check for PDF flavors.
+        """
+        new_flavors = {
+            flavor
+            for flavor in term.free_symbols
+            if not str(flavor) in self._data.columns
+        }
+        new_flavors_nuclear: set[sp.Basic] = set()
+        new_flavors_bound_proton: set[sp.Basic] = set()
+        if self._construct_full_nuclear_pdfs:
+            new_flavors_nuclear = new_flavors & flavors_nucleus
+            new_flavors_bound_proton = new_flavors_nuclear.union(
+                isospin_transform[f] for f in new_flavors_nuclear
+            )
+            new_flavors -= new_flavors_nuclear
+
+        for flavor in new_flavors_bound_proton:
+            self._data[str(flavor) + " bound"] = [self._pdfs[member].xfxQ(pid_from_flavor[flavor], x, Q) for Q, member, x in self._data.index]  # type: ignore
+
+        # construct nuclear PDFs which are not u, d, u̅, d̅
+        for flavor in new_flavors:
+            self._data[str(flavor)] = [self._pdfs[member].xfxQ(pid_from_flavor[flavor], x, Q) for Q, member, x in self._data.index]  # type: ignore
+
+        # construct nuclear PDFs
+        for flavor in new_flavors_nuclear:
+            self._data[str(flavor)] = (
+                self.Z / self.A * self._data[str(flavor) + " bound"]
+                + (self.A - self.Z)
+                / self.A
+                * self._data[str(isospin_transform[flavor]) + " bound"]
+            )
+
+    def _check_and_calculate_observable(self, term: sp.Basic) -> None:
+        """Checks if the observable `term` is already stored in `_observables` and calculates it if not.
+
+        Parameters
+        ----------
+        term : sympy.Basic
+            The observable to calculate.
+        """
+        self._check_and_load_flavors(term)
+        if not str(term) in self._observables.columns:
+            # put term.free_symbols in a list since sp.lambdify depends on the order of the symbols
+            symbols_ordered = list(term.free_symbols)
+            if not str(term) in self._data.columns:
+                self._data[str(term)] = sp.lambdify(symbols_ordered, term)(
+                    *[self._data[str(flavor)] for flavor in symbols_ordered]
+                )
+
+            if len(self.pdfs) == 1:
+                self._observables[str(term)] = (
+                    self._data.loc[idx[:, 0, :], str(term)]
+                    .droplevel(1)
+                    .reset_index()
+                    .assign(pdf_type="central")
+                    .set_index(["pdf_type", "Q", "x"])
+                )
+            else:
+                self._observables[str(term)] = self._data[str(term)].unstack("member").apply(lambda x: self._pdf_set.uncertainty(x, cl=self.confidence_level), axis=1).apply(func=(lambda x: pd.Series([x.central, x.central + x.errplus, x.central - x.errminus, x.central + x.errsymm, x.central - x.errsymm], index=self._observables.index.get_level_values("pdf_type").unique()))).stack().reorder_levels(["pdf_type", "Q", "x"])  # type: ignore
+
+    def _check_and_calculate_ratio(self, term: sp.Basic, denominator: "PDFSet") -> None:
+        """Check if the ratio of the observable `term` is already stored in `_ratios` and calculates it if not.
+
+        Parameters
+        ----------
+        term : sympy.Basic
+            The observable to calculate the ratio of.
+        denominator : PDFSet, optional
+            The PDF set of which the observable `term` in the denominator is taken of, by default None.
+        """
+
+        if (
+            denominator
+            and not str(term) + " " + denominator.name in self._ratios.columns
+        ):
+            self._check_and_calculate_observable(term)
+            denominator._check_and_calculate_observable(term)
+
+            if (
+                self.uncertainty_type == "replicas"
+                and denominator.uncertainty_type == "replicas"
+            ):
+                self._ratios[str(term) + " " + denominator.name] = (
+                    (self._data[str(term)] / denominator._data[str(term)])
+                    .unstack("member")
+                    .apply(
+                        lambda x: self._pdf_set.uncertainty(
+                            x, cl=self.confidence_level
+                        ),
+                        axis=1,
+                    )
+                    .apply(
+                        func=(
+                            lambda x: pd.Series(
+                                [
+                                    x.central,
+                                    x.central + x.errplus,
+                                    x.central - x.errminus,
+                                    x.central + x.errsymm,
+                                    x.central - x.errsymm,
+                                ],
+                                index=self._ratios.index.get_level_values(
+                                    "pdf_type"
+                                ).unique(),
+                            )
+                        )
+                    )
+                    .stack()
+                    .reorder_levels(["pdf_type", "Q", "x"])
+                )
+            else:
+                self._ratios[str(term) + " " + denominator.name] = (
+                    self._data[str(term)]
+                    .unstack("member")
+                    .divide(denominator._data.loc[:, 0, :][str(term)], axis=0)
+                    .apply(
+                        lambda x: self._pdf_set.uncertainty(
+                            x, cl=self.confidence_level
+                        ),
+                        axis=1,
+                    )
+                    .apply(
+                        func=(
+                            lambda x: pd.Series(
+                                [
+                                    x.central,
+                                    x.central + x.errplus,
+                                    x.central - x.errminus,
+                                    x.central + x.errsymm,
+                                    x.central - x.errsymm,
+                                ],
+                                index=self._ratios.index.get_level_values(
+                                    "pdf_type"
+                                ).unique(),
+                            )
+                        )
+                    )
+                    .stack()
+                    .reorder_levels(["pdf_type", "Q", "x"])
+                )
+
+    def _flatten_x_Q(
+        self,
+        x: npt.ArrayLike | None = None,
+        Q: npt.ArrayLike | None = None,
+        Q2: npt.ArrayLike | None = None,
+    ) -> tuple[npt.ArrayLike | slice, npt.ArrayLike | slice, tuple[int, ...]]:
+        x_flat: npt.NDArray[np.floating] | slice
+        Q_flat: npt.NDArray[np.floating] | slice
+
+        if x is None:
+            x_flat = idx[:]
+        else:
+            x_flat = np.array(x)
+
+        if Q is None and Q2 is None:
+            Q_flat = idx[:]
+        elif Q is None and Q2 is not None:
+            Q_flat = np.array(np.sqrt(Q2))
+        elif Q is not None and Q2 is None:
+            Q_flat = np.array(Q)
+        else:
+            raise ValueError("Only one of Q and Q2 must be given")
+
+        # check if we set x or Q to idx[:]
+        if isinstance(x_flat, np.ndarray) and not isinstance(Q_flat, np.ndarray):
+            shape = self.Q_values.shape + x_flat.shape
+            x_flat = x_flat.flatten()
+        elif not isinstance(x_flat, np.ndarray) and isinstance(Q_flat, np.ndarray):
+            shape = self.x_values.shape + Q_flat.shape
+            Q_flat = Q_flat.flatten()
+        elif isinstance(x_flat, np.ndarray) and isinstance(Q_flat, np.ndarray):
+            x_flat, Q_flat = np.broadcast_arrays(x_flat, Q_flat)
+            shape = x_flat.shape
+            x_flat = x_flat.flatten()
+            Q_flat = Q_flat.flatten()
+        elif not isinstance(x_flat, np.ndarray) and not isinstance(
+            Q_flat, np.ndarray
+        ):  # FIXME
+            shape = np.broadcast_shapes(self.x_values.shape, self.Q_values.shape)
+
+        return x_flat, Q_flat, shape
+
+    def _reshape(
+        self, a: npt.NDArray[np.floating], shape: tuple[int, ...]
+    ) -> npt.NDArray[np.floating] | np.floating:
+        return a.reshape(shape)[()]
+
+    def get_central(
+        self,
+        observable: sp.Basic,
+        x: npt.ArrayLike | None = None,
+        Q: npt.ArrayLike | None = None,
+        Q2: npt.ArrayLike | None = None,
+        ratio_to: PDFSet | None = None,
+    ) -> npt.NDArray[np.floating] | np.floating:
+        """Gets the central value of an observable or a ratio of observables.
+
+        Parameters
+        ----------
+        observable : sympy.Basic
+            The observable to get the central value of.
+        x : numpy.ArrayLike, optional
+            The momentum fraction at which the observable is calculated. By default None, which means that all values in `x_values` are used. If only `x` is given, a 2d-array of shape (`self.Q_values`, `x`) is returned. If both `x` and `Q` (or `Q2`) are given, they are broadcast according to NumPy's broadcasting rules. If none of them are given, a 2d-array of shape (`self.Q_values`, `self.x_values`) is returned.
+        Q : numpy.ArrayLike, optional
+            The scale at which the observable is calculated. Only one of `Q` or `Q2` must be given. By default None, which means that all values in `Q_values` are used. If only `Q` is given, a 2d-array of shape (`self.x_values`, `Q`) is returned. If both `x` and `Q` are given, they are broadcast according to NumPy's broadcasting rules. If none of them are given, a 2d-array of shape (`self.Q_values`, `self.x_values`) is returned.
+        Q2 : numpy.ArrayLike, optional
+            The squared scale at which the observable is calculated. Only one of `Q` or `Q2` must be given. By default None, which means that all values in `Q2_values` are used. If only `Q2` is given, a 2d-array of shape (`self.x_values`, `Q2`) is returned. If both `x` and `Q2` are given, they are broadcast according to NumPy's broadcasting rules. If none of them are given, a 2d-array of shape (`self.Q2_values`, `self.x_values`) is returned.
+        ratio_to : PDFSet, optional
+            For calculating ratios: the PDF set of which the `observable` in the denominator is taken of, by default None, i.e. no ratio.
+
+        Returns
+        -------
+        numpy.ndarray[np.floating]
+            The values of the PDF or the observable.
+        """
+        x_flat, Q_flat, shape = self._flatten_x_Q(x, Q, Q2)
+
+        if ratio_to is not None:
+            self._check_and_calculate_ratio(observable, ratio_to)
+            result = self._ratios.loc[idx["central", Q_flat, x_flat], str(observable) + " " + ratio_to.name].to_numpy()  # type: ignore
+        else:
+            self._check_and_calculate_observable(observable)
+            result = self._observables.loc[idx["central", Q_flat, x_flat], str(observable)].to_numpy()  # type: ignore
+
+        return self._reshape(result, shape)
+
+    def get_member(
+        self,
+        observable: sp.Basic,
+        member: int,
+        x: npt.ArrayLike | None = None,
+        Q: npt.ArrayLike | None = None,
+        Q2: npt.ArrayLike | None = None,
+    ) -> npt.NDArray[np.floating]:
+        x_flat, Q_flat, shape = self._flatten_x_Q(x, Q, Q2)
+
+        self._check_and_calculate_observable(observable)
+        return self._reshape(self._data.loc[(Q_flat, member, x_flat), str(observable)].to_numpy(), shape)  # type: ignore
+
+    def get_uncertainty(
+        self,
+        side: Literal["+", "-"],
+        observable: sp.Basic,
+        x: npt.ArrayLike | None = None,
+        Q: npt.ArrayLike | None = None,
+        Q2: npt.ArrayLike | None = None,
+        ratio_to: PDFSet | None = None,
+        convention: Literal["sym", "asym"] = "sym",
+    ) -> npt.NDArray[np.floating] | np.floating:
+        """Gets the uncertainties of an observable or a ratio of observables.
+
+        Parameters
+        ----------
+        side : Literal["+", "-"]
+            The side of the uncertainty to get. "+" for the upper uncertainty, "-" for the lower one.
+        observable : sympy.Basic
+            The observable to get the uncertainties of.
+        x : numpy.ArrayLike, optional
+            The momentum fraction at which the observable is calculated. By default None, which means that all values in `x_values` are used. If only `x` is given, a 2d-array of shape (`self.Q_values`, `x`) is returned. If both `x` and `Q` (or `Q2`) are given, they are broadcast according to NumPy's broadcasting rules. If none of them are given, a 2d-array of shape (`self.Q_values`, `self.x_values`) is returned.
+        Q : numpy.ArrayLike, optional
+            The scale at which the observable is calculated. Only one of `Q` or `Q2` must be given. By default None, which means that all values in `Q_values` are used. If only `Q` is given, a 2d-array of shape (`self.x_values`, `Q`) is returned. If both `x` and `Q` are given, they are broadcast according to NumPy's broadcasting rules. If none of them are given, a 2d-array of shape (`self.Q_values`, `self.x_values`) is returned.
+        Q2 : numpy.ArrayLike, optional
+            The squared scale at which the observable is calculated. Only one of `Q` or `Q2` must be given. By default None, which means that all values in `Q2_values` are used. If only `Q2` is given, a 2d-array of shape (`self.x_values`, `Q2`) is returned. If both `x` and `Q2` are given, they are broadcast according to NumPy's broadcasting rules. If none of them are given, a 2d-array of shape (`self.Q2_values`, `self.x_values`) is returned.
+        ratio_to : PDFSet, optional
+            For calculating ratios: the PDF set of which the `observable` in the denominator is taken of, by default None, i.e. no ratio.
+        convention : "sym" or "asym", optional
+            The convention for the uncertainty. "sym" for symmetric uncertainties, "asym" for asymmetric uncertainties. By default "sym".
+
+        Returns
+        -------
+        numpy.ndarray[np.floating]
+            The values of the lower or upper uncertainties.
+        """
+        x_flat, Q_flat, shape = self._flatten_x_Q(x, Q, Q2)
+
+        if ratio_to:
+            self._check_and_calculate_ratio(observable, ratio_to)
+            result = self._ratios.loc[idx["_".join(["unc", convention, side]), Q_flat, x_flat], str(observable) + " " + ratio_to.name].to_numpy()  # type: ignore
+        else:
+            self._check_and_calculate_observable(observable)
+            result = self._observables.loc[idx["_".join(["unc", convention, side]), Q_flat, x_flat], str(observable)].to_numpy()  # type: ignore
+
+        return self._reshape(result, shape)
+
+    def get_uncertainties(
+        self,
+        observable: sp.Basic,
+        x: npt.ArrayLike | None = None,
+        Q: npt.ArrayLike | None = None,
+        Q2: npt.ArrayLike | None = None,
+        ratio_to: PDFSet | None = None,
+        convention: Literal["sym", "asym"] = "sym",
+    ) -> tuple[
+        npt.NDArray[np.floating] | np.floating, npt.NDArray[np.floating] | np.floating
+    ]:
+        """Convenience function to get the lower and upper uncertainties as a tuple, e.g. for use with the unpacking operator.
+
+        Parameters
+        ----------
+        observable : sympy.Basic
+            The observable to get the uncertainties of.
+        x : numpy.ArrayLike, optional
+            The momentum fraction at which the observable is calculated. By default None, which means that all values in `x_values` are used. If only `x` is given, a 2d-array of shape (`self.Q_values`, `x`) is returned. If both `x` and `Q` (or `Q2`) are given, they are broadcast according to NumPy's broadcasting rules. If none of them are given, a 2d-array of shape (`self.Q_values`, `self.x_values`) is returned.
+        Q : numpy.ArrayLike, optional
+            The scale at which the observable is calculated. Only one of `Q` or `Q2` must be given. By default None, which means that all values in `Q_values` are used. If only `Q` is given, a 2d-array of shape (`self.x_values`, `Q`) is returned. If both `x` and `Q` are given, they are broadcast according to NumPy's broadcasting rules. If none of them are given, a 2d-array of shape (`self.Q_values`, `self.x_values`) is returned.
+        Q2 : numpy.ArrayLike, optional
+            The squared scale at which the observable is calculated. Only one of `Q` or `Q2` must be given. By default None, which means that all values in `Q2_values` are used. If only `Q2` is given, a 2d-array of shape (`self.x_values`, `Q2`) is returned. If both `x` and `Q2` are given, they are broadcast according to NumPy's broadcasting rules. If none of them are given, a 2d-array of shape (`self.Q2_values`, `self.x_values`) is returned.
+        ratio_to : PDFSet, optional
+            For calculating ratios: the PDF set of which the `observable` in the denominator is taken of, by default None, i.e. no ratio.
+        convention : "sym" or "asym", optional
+            The convention for the uncertainty. "sym" for symmetric uncertainties, "asym" for asymmetric uncertainties. By default "sym".
+
+        Returns
+        -------
+        numpy.ndarray[np.floating], numpy.ndarray[np.floating]
+            The values of the lower and upper uncertainties as a tuple.
+        """
+        return self.get_uncertainty(
+            "+", observable, x, Q, Q2, ratio_to, convention
+        ), self.get_uncertainty("-", observable, x, Q, Q2, ratio_to, convention)

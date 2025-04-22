@@ -1,0 +1,13 @@
+[project]
+name = "PDFPlotter"
+version = "0.1.0"
+description = "PDFPlotter is a library to simplify plotting PDFs (parton distribution functions), including nuclear PDFs."
+readme = "README.md"
+requires-python = ">=3.8"
+dependencies = [
+    "matplotlib>=3.10.0",
+    "numpy>=2.1.0",
+    "pandas>=2.2.0",
+    "sympy>=1.13.0",
+    "lhapdf>=6.5.0",
+]
