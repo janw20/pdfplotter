@@ -1,10 +1,52 @@
 from __future__ import annotations
 
-import pandas as pd
-
 from io import StringIO
 
-_pubchem_elements_csv = """"AtomicNumber","Symbol","Name","AtomicMass"
+import numpy as np
+import pandas as pd
+
+
+def element_to_str(
+    A: int | float | None = None, Z: int | float | None = None, long: bool = False
+) -> str:
+    """Convert atomic number and mass number to element symbol.
+
+    Parameters
+    ----------
+    A : int | float | None, optional
+        Mass number of the element. By default None.
+    Z : int | float | None, optional
+        Atomic number of the element. By default None.
+    long : bool, optional
+        If the name of the element should be returned instead of its name (e.g. "Lead" instead of "Pb"). By default False.
+
+    Returns
+    -------
+    str
+        Symbol or name of the element.
+    """
+    if A is not None:
+        if Z is not None:
+            raise ValueError("Please pass either A or Z, not both")
+
+        row = _elements.iloc[(_elements["AtomicMass"] - A).abs().argsort().iloc[0]]
+    elif Z is not None:
+        row = _elements.iloc[
+            pd.Series(_elements.index.get_level_values("AtomicNumber") - Z)
+            .abs()
+            .argsort()
+            .iloc[0]
+        ]
+    else:
+        raise ValueError("Please pass either A or Z")
+
+    if long:
+        return row["Name"]
+    else:
+        return row["Symbol"]
+
+
+_elements_csv = """"AtomicNumber","Symbol","Name","AtomicMass"
 1,"H","Hydrogen",1.0080
 2,"He","Helium",4.00260
 3,"Li","Lithium",7.0
@@ -86,7 +128,7 @@ _pubchem_elements_csv = """"AtomicNumber","Symbol","Name","AtomicMass"
 79,"Au","Gold",196.96657
 80,"Hg","Mercury",200.59
 81,"Tl","Thallium",204.383
-82,"Pb","Lead",207
+82,"Pb","Lead",207.97665
 83,"Bi","Bismuth",208.98040
 84,"Po","Polonium",208.98243
 85,"At","Astatine",209.98715
@@ -123,6 +165,4 @@ _pubchem_elements_csv = """"AtomicNumber","Symbol","Name","AtomicMass"
 116,"Lv","Livermorium",293.205
 117,"Ts","Tennessine",294.211
 118,"Og","Oganesson",295.216 """
-_pubchem_elements = pd.read_csv(
-    StringIO(_pubchem_elements_csv), index_col="AtomicNumber"
-)
+_elements = pd.read_csv(StringIO(_elements_csv), index_col="AtomicNumber")
