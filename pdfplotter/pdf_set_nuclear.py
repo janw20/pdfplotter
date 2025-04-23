@@ -6,9 +6,14 @@ from typing import Sequence
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
+import matplotlib.pyplot as plt
+import sympy as sp
+import math
+import seaborn as sns
+from pdfplotter import util
 
 from pdfplotter.pdf_set import PDFSet
-
+from pdfplotter import flavors
 
 class NuclearPDFSet(PDFSet):
 
@@ -153,3 +158,106 @@ class NuclearPDFSet(PDFSet):
                 raise ValueError(f"Multiple PDFSets found for Z = {Z}")
             else:
                 return pdf_set.iloc[0]["pdf_set"]
+
+
+    def plot_Af_plane(
+            self, x_vals: npt.ArrayLike, observables:Sequence[sp.Basic], Q: float = 2, colors:Sequence=[], logx:bool=True, name:str| None = None, 
+            plot_unc:bool=False, plotPRatio:bool=False, plot_args:dict | None=None, legend_args:dict |None =None, label_args:dict={"fontsize":15}, title_args:dict|None={"fontsize":15},
+            notation_args:dict={"fontsize":12,
+                "xy":(0.97,0.96)}
+    )->Sequence[plt.axes]:
+
+
+
+        my_sets=self.pdf_sets
+        my_data={}
+
+        for x in x_vals:
+            if x not in self.get(A=my_sets["A"][0]).x_values:
+                raise ValueError(f"Chosen x value {x} was not used for defining nuclear pdf set. \n Pleas choose x that was used in initialising")
+
+        if colors==[]:
+            colors=sns.color_palette("viridis", n_colors=len(x_vals))
+        
+        if len(colors)!=len(x_vals):
+            raise ValueError("No. of colors must match no. of x-values")
+
+        for obs in observables:
+            data_obs={}
+            list_x=[]
+            list_central=[]
+            list_unc1=[]
+            list_unc2=[]
+            list_A=[]
+            for A in my_sets["A"]:
+                for x in self.get(A=A).x_values:
+                    list_x.append(x)
+                    list_central.append(self.get(A=A).get_central(x=x,Q=Q,observable=obs))
+                    unc1=self.get(A=A).get_uncertainties(x=x,Q=Q,observable=obs)[0]
+                    unc2=self.get(A=A).get_uncertainties(x=x,Q=Q,observable=obs)[1]
+                    if math.isnan(unc1):
+                        list_unc1.append(self.get(A=A).get_central(x=x,Q=Q,observable=obs))
+                    else:
+                        list_unc1.append(unc1)
+                    if math.isnan(unc2):
+                        list_unc2.append(self.get(A=A).get_central(x=x,Q=Q,observable=obs))
+                    else:
+                        list_unc2.append(unc2)
+                i=0 
+                while i < len(self.get(A=A).x_values):
+                    list_A.append(A)
+                    i+=1
+
+            data_obs["A"]=list_A
+            data_obs["x"]=list_x
+            data_obs["central"]=list_central
+            data_obs["unc1"]=list_unc1
+            data_obs["unc2"]=list_unc2
+
+            dataframe_obs=pd.DataFrame(data_obs)
+            my_data[obs]=dataframe_obs
+        
+        fig, axs =plt.subplots(1,len(observables), figsize=(9*len(observables),5))
+
+        for i,(obs, ax_i) in enumerate(zip(observables, axs)):
+            
+            if not plotPRatio:
+                for x,col in zip(x_vals,colors):
+                    ax_i.plot(my_data[obs].query(f"x=={x}")["A"], my_data[obs].query(f"x=={x}")["central"],color=col,label=f"x={x}",**plot_args)
+
+                    if plot_unc:
+                        ax_i.fill_between(my_data[obs].query(f"x=={x}")["A"],my_data[obs].query(f"x=={x}")["unc1"], my_data[obs].query(f"x=={x}")["unc2"],color=col,alpha=0.3)
+            
+            else:
+                for x,col in zip(x_vals,colors):
+                    ax_i.plot(my_data[obs].query(f"x=={x}")["A"], np.array(my_data[obs].query(f"x=={x}")["central"])/np.array(my_data[obs].query(f"A=={1} & x=={x}")["central"]),color=col,label=f"x={x}",**plot_args)
+    
+                    if plot_unc:
+                        ax_i.fill_between(my_data[obs].query(f"x=={x}")["A"],my_data[obs].query(f"x=={x}")["unc1"], my_data[obs].query(f"x=={x}")["unc2"],color=col,alpha=0.3)            
+            ax_i.set_xlabel("$A$", **label_args)
+            #ax_i.set_title(f"${util.to_str(obs)}$")
+            ax_i.annotate(
+                f"${util.to_str(obs,Q=Q)}$",
+                xycoords="axes fraction",
+                va="top",
+                ha="right",
+                bbox=dict(
+                    facecolor=(1,1,1),
+                    edgecolor=(0.8,0.8,0.8),
+                    lw=0.9,
+                    boxstyle="round, pad=0.2"
+                ), **notation_args
+            )
+            if logx:
+                ax_i.set_xscale("log")
+        axs[-1].legend(**legend_args)
+        if plotPRatio:
+            axs[0].set_ylabel("$R_x(A)$", **label_args)
+        else:
+            axs[0].set_ylabel("$f_x(A)$", **label_args)
+        if name:
+            fig.suptitle(f"{name}, Q= {Q} GeV", **title_args)
+        else:
+            fig.suptitle(f"Q= {Q} GeV", **title_args)
+
+        return axs
