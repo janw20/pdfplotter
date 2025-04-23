@@ -3,7 +3,6 @@ from __future__ import annotations
 import numpy as np
 import sympy as sp
 
-from pdfplotter.elements import _pubchem_elements
 from pdfplotter.flavors import *
 
 
@@ -153,19 +152,3 @@ def to_str(
         )
 
     return result_str
-
-
-def get_element_symbol(Z: int) -> str:
-    """Gets the symbol of an element from its atomic number. For `Z = 1`, the proton is assumed, so an empty string is returned.
-
-    Parameters
-    ----------
-    Z : int
-        Atomic number of the element.
-
-    Returns
-    -------
-    str
-        Symbol of the element.
-    """
-    return str(_pubchem_elements.loc[Z, "Symbol"]) if Z > 1 else ""
