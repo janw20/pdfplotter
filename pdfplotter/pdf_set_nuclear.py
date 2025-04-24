@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from itertools import cycle, zip_longest
-from typing import Any, Literal
+from typing import Any, Literal, cast
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -169,6 +169,7 @@ class NuclearPDFSet(PDFSet):
         Q2: npt.ArrayLike | None = None,
         offset: tuple[float, float] = (0.15, 0.1),
         pdf_label: Literal["ylabel", "annotate"] = "ylabel",
+        legend: bool = True,
         kwargs_central: dict[str, Any] | list[dict[str, Any] | None] = {},
         kwargs_uncertainty: dict[str, Any] | list[dict[str, Any] | None] = {},
         kwargs_uncertainty_edges: dict[str, Any] | list[dict[str, Any] | None] = {},
@@ -222,7 +223,8 @@ class NuclearPDFSet(PDFSet):
                 pdf_set = self.get(A=A_i)
                 x_i = x if x is not None else pdf_set.x_values
                 Q_i = Q if Q is not None else pdf_set.Q_values
-                Q2_i = Q2 if Q2 is not None else pdf_set.Q2_values
+
+                Q_i_label = cast(float, Q_i) if isinstance(Q_i, np.floating) else None
 
                 color = next(colors)
 
@@ -382,7 +384,7 @@ class NuclearPDFSet(PDFSet):
                             i,
                         )
                         ax_i.annotate(
-                            f"${to_str(obs_i)}$",
+                            f"${to_str(obs_i, Q=Q_i_label)}$",
                             **kwargs,
                         )
 
@@ -392,19 +394,20 @@ class NuclearPDFSet(PDFSet):
 
                     # add the ylabel
                     if pdf_label == "ylabel":
-                        ax_i.set_ylabel(f"${to_str(obs_i)}$", **kwargs_ylabel)
+                        ax_i.set_ylabel(f"${to_str(obs_i, Q=Q_i_label)}$", **kwargs_ylabel)
 
             # add the legend
-            kwargs_default = {
-                "loc": "upper left",
-                "bbox_to_anchor": (0.63, 1.02),
-            }
-            kwargs = update_kwargs(
-                kwargs_default,
-                kwargs_legend,
-            )
-            ax_i.legend(
-                lines,
-                [f"$A = {A_i}$ ({element_to_str(A_i)})" for A_i in A],
-                **kwargs,
-            )
+            if legend:
+                kwargs_default = {
+                    "loc": "upper left",
+                    "bbox_to_anchor": (0.63, 1.02),
+                }
+                kwargs = update_kwargs(
+                    kwargs_default,
+                    kwargs_legend,
+                )
+                ax_i.figure.legend(
+                    lines,
+                    [f"$A = {A_i}$ ({element_to_str(A_i)})" for A_i in A],
+                    **kwargs,
+                )
