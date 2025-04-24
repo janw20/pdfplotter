@@ -177,6 +177,39 @@ class NuclearPDFSet(PDFSet):
         kwargs_ylabel: dict[str, Any] = {},
         kwargs_legend: dict[str, Any] = {},
     ) -> None:
+        """Plot the A-dependence of this PDF set.
+
+        Parameters
+        ----------
+        ax : plt.Axes | npt.NDArray[plt.Axes]
+            The axes to plot on. If multiple axes are given, each observable is plotted on its own subplot, which means `ax.size` must be equal to `len(observable)`.
+        A : list[int  |  float] | None, optional
+            Values of A to plot, by default None. If None, all values of A that were loaded are used.
+        x : npt.ArrayLike | None, optional
+            Values of x at which the observables are plotted, by default None. If None, all values of x that were loaded are used.
+        Q : npt.ArrayLike | None, optional
+            Values of Q at which the observables are plotted, by default None. If None, all values of Q that were loaded are used. Only `Q` or `Q2` can be given, not both.
+        Q2 : npt.ArrayLike | None, optional
+            Values of Q^2 at which the observables are plotted, by default None. If None, all values of Q^2 that were loaded are used. Only `Q` or `Q2` can be given, not both.
+        pdf_label : Literal["ylabel", "annotate"], optional
+            If the label of the observable should be shown as a y-axis label or as an annotation, by default "ylabel".
+        legend : bool, optional
+            If the legend showing the plotted values for A should be shown, by default True.
+        kwargs_central : dict[str, Any] | list[dict[str, Any]  |  None], optional
+            Additional keyword arguments for the central PDF that should be passed to `plt.Axes.plot`, by default {}. If a list of keyword arguments is given, the i-th element is used for the i-th A value.
+        kwargs_uncertainty : dict[str, Any] | list[dict[str, Any]  |  None], optional
+            Additional keyword arguments for the PDF uncertainty band that should be passed to `plt.Axes.fill_between`, by default {}. If a list of keyword arguments is given, the i-th element is used for the i-th A value.
+        kwargs_uncertainty_edges : dict[str, Any] | list[dict[str, Any]  |  None], optional
+            Additional keyword arguments for the edges of the PDF uncertainty band that should be passed to `plt.Axes.plot`, by default {}. If a list of keyword arguments is given, the i-th element is used for the i-th A value.
+        kwargs_annotation : dict[str, Any] | list[dict[str, Any]  |  None], optional
+            Additional keyword arguments for the annotation of the observable that should be passed to `plt.Axes.annotate`, by default {}. These only have an effect if `pdf_label` is "annotate".
+        kwargs_xlabel : dict[str, Any], optional
+            Additional keyword arguments for the x-axis label that should be passed to `plt.Axes.set_xlabel`, by default {}.
+        kwargs_ylabel : dict[str, Any], optional
+            Additional keyword arguments for the y-axis label that should be passed to `plt.Axes.set_ylabel`, by default {}. These only have an effect if `pdf_label` is "ylabel".
+        kwargs_legend : dict[str, Any], optional
+            Additional keyword arguments for the legend that should be passed to `plt.Figure.legend`, by default {}. These only have an effect if `legend` is `True`.
+        """
         if not isinstance(ax, np.ndarray):
             ax = np.array([ax])
 
@@ -337,6 +370,43 @@ class NuclearPDFSet(PDFSet):
         kwargs_ylabel: dict[str, Any] = {},
         kwargs_legend: dict[str, Any] = {},
     ) -> None:
+        """Plot the A-dependence of this PDF set as a sheared 3D plot, i.e. using insets.
+
+        Parameters
+        ----------
+        ax : plt.Axes | npt.NDArray[plt.Axes]
+            The axes to plot on. If multiple axes are given, each observable is plotted on its own subplot, which means `ax.size` must be equal to `len(observable)`.
+        A : list[int  |  float] | None, optional
+            Values of A to plot, by default None. If None, all values of A that were loaded are used.
+        x : npt.ArrayLike | None, optional
+            Values of x at which the observables are plotted, by default None. If None, all values of x that were loaded are used.
+        Q : npt.ArrayLike | None, optional
+            Values of Q at which the observables are plotted, by default None. If None, all values of Q that were loaded are used. Only `Q` or `Q2` can be given, not both.
+        Q2 : npt.ArrayLike | None, optional
+            Values of Q^2 at which the observables are plotted, by default None. If None, all values of Q^2 that were loaded are used. Only `Q` or `Q2` can be given, not both.
+        offset : tuple[float, float], optional
+            Offset between the inset axes in axes fractions, by default (0.15, 0.1).
+        pdf_label : Literal["ylabel", "annotate"], optional
+            If the label of the observable should be shown as a y-axis label or as an annotation, by default "ylabel".
+        legend : bool, optional
+            If the legend showing the plotted values for A should be shown, by default True.
+        kwargs_central : dict[str, Any] | list[dict[str, Any]  |  None], optional
+            Additional keyword arguments for the central PDF that should be passed to `plt.Axes.plot`, by default {}. If a list of keyword arguments is given, the i-th element is used for the i-th A value.
+        kwargs_uncertainty : dict[str, Any] | list[dict[str, Any]  |  None], optional
+            Additional keyword arguments for the PDF uncertainty band that should be passed to `plt.Axes.fill_between`, by default {}. If a list of keyword arguments is given, the i-th element is used for the i-th A value.
+        kwargs_uncertainty_edges : dict[str, Any] | list[dict[str, Any]  |  None], optional
+            Additional keyword arguments for the edges of the PDF uncertainty band that should be passed to `plt.Axes.plot`, by default {}. If a list of keyword arguments is given, the i-th element is used for the i-th A value.
+        kwargs_spines : dict[str, Any] | list[dict[str, Any]  |  None], optional
+            Additional keyword arguments for the spines between the insets that should be passed to `matplotlib.lines.Line2D`, by default {}.
+        kwargs_annotation : dict[str, Any], optional
+            Additional keyword arguments for the annotation of the observable that should be passed to `plt.Axes.annotate`, by default {}. These only have an effect if `pdf_label` is "annotate".
+        kwargs_xlabel : dict[str, Any], optional
+            Additional keyword arguments for the x-axis label that should be passed to `plt.Axes.set_xlabel`, by default {}.
+        kwargs_ylabel : dict[str, Any], optional
+            Additional keyword arguments for the y-axis label that should be passed to `plt.Axes.set_ylabel`, by default {}. These only have an effect if `pdf_label` is "ylabel".
+        kwargs_legend : dict[str, Any], optional
+            Additional keyword arguments for the legend that should be passed to `plt.Figure.legend`, by default {}. These only have an effect if `legend` is `True`.
+        """
         if not isinstance(ax, np.ndarray):
             ax = np.array([ax])
 
