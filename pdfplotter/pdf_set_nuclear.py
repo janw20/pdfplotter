@@ -224,7 +224,7 @@ class NuclearPDFSet(PDFSet):
                 x_i = x if x is not None else pdf_set.x_values
                 Q_i = Q if Q is not None else pdf_set.Q_values
 
-                Q_i_label = cast(float, Q_i) if isinstance(Q_i, np.floating) else None
+                Q_i_label = None if isinstance(Q_i, np.ndarray) else cast(float, Q_i)
 
                 color = next(colors)
 
