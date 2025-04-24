@@ -159,6 +159,164 @@ class NuclearPDFSet(PDFSet):
             else:
                 return pdf_set.iloc[0]["pdf_set"]
 
+    def plot_A_dep(
+        self,
+        ax: plt.Axes | npt.NDArray[plt.Axes],  # pyright: ignore[reportInvalidTypeForm]
+        observable: sp.Basic | list[sp.Basic],
+        A: list[int | float] | None = None,
+        x: npt.ArrayLike | None = None,
+        Q: npt.ArrayLike | None = None,
+        Q2: npt.ArrayLike | None = None,
+        pdf_label: Literal["ylabel", "annotate"] = "ylabel",
+        legend: bool = True,
+        kwargs_central: dict[str, Any] | list[dict[str, Any] | None] = {},
+        kwargs_uncertainty: dict[str, Any] | list[dict[str, Any] | None] = {},
+        kwargs_uncertainty_edges: dict[str, Any] | list[dict[str, Any] | None] = {},
+        kwargs_annotation: dict[str, Any] | list[dict[str, Any] | None] = {},
+        kwargs_xlabel: dict[str, Any] = {},
+        kwargs_ylabel: dict[str, Any] = {},
+        kwargs_legend: dict[str, Any] = {},
+    ) -> None:
+        if not isinstance(ax, np.ndarray):
+            ax = np.array([ax])
+
+        if not isinstance(observable, list):
+            observable = [observable]
+
+        if A is None:
+            A = list(self.pdf_sets["A"])
+        elif not isinstance(A, list):
+            A = [A]
+
+        # plot each observable on its own subplot
+        for obs_i, ax_i in zip(observable, ax.flat):
+            ax_i: plt.Axes
+
+            # get the colors from the default color cycle so individual colors for each A are overridable
+            colors = cycle(plt.rcParams["axes.prop_cycle"].by_key()["color"])
+
+            # we save the lines to add them to the legend in the end
+            lines = []
+
+            for i, A_i in enumerate(A):
+
+                pdf_set = self.get(A=A_i)
+                x_i = x if x is not None else pdf_set.x_values
+                Q_i = Q if Q is not None else pdf_set.Q_values
+
+                Q_i_label = None if isinstance(Q_i, np.ndarray) else cast(float, Q_i)
+
+                color = next(colors)
+
+                # plot the central PDF
+                kwargs_default = {
+                    "zorder": 15,
+                    "color": color,
+                }
+                kwargs = update_kwargs(
+                    kwargs_default,
+                    kwargs_central,
+                    i,
+                )
+                l = ax_i.plot(
+                    x_i,
+                    pdf_set.get_central(obs_i, Q=Q_i),
+                    label=f"$A = {A}$ ({element_to_str(A_i)})",
+                    **kwargs,
+                )
+                lines.append(l[0])
+
+                # plot the uncertainty band
+                kwargs_default = {
+                    "zorder": 15,
+                    "alpha": 0.3,
+                    "facecolor": color,
+                }
+                kwargs = update_kwargs(
+                    kwargs_default,
+                    kwargs_uncertainty,
+                    i,
+                )
+                ax_i.fill_between(
+                    x_i,
+                    *pdf_set.get_uncertainties(observable=obs_i, Q=Q_i),
+                    **kwargs,
+                )  # pyright: ignore[reportArgumentType]
+
+                # plot the edges of the uncertainty band
+                kwargs_default = {
+                    "zorder": 15,
+                    "color": color,
+                    "lw": 0.5,
+                }
+                kwargs = update_kwargs(
+                    kwargs_default,
+                    kwargs_uncertainty_edges,
+                    i,
+                )
+                ax_i.plot(
+                    x_i,
+                    pdf_set.get_uncertainty("+", obs_i, Q=Q_i),
+                    **kwargs,
+                )
+                ax_i.plot(
+                    x_i,
+                    pdf_set.get_uncertainty("-", obs_i, Q=Q_i),
+                    **kwargs,
+                )
+
+                ax_i.set_xscale("log")
+                ax_i.set_xlim(1e-5, 1)
+
+                if i == 0:
+                    # add the pdf_label as annotation ...
+                    if pdf_label == "annotate":
+                        kwargs_default = {
+                            "xy": (0.97, 0.95),
+                            "xycoords": "axes fraction",
+                            "va": "top",
+                            "ha": "right",
+                            "fontsize": 11,
+                            "bbox": dict(
+                                facecolor=(1, 1, 1),
+                                edgecolor=(0.8, 0.8, 0.8),
+                                lw=0.9,
+                                boxstyle="round,pad=0.2",
+                            ),
+                        }
+                        kwargs = update_kwargs(
+                            kwargs_default,
+                            kwargs_annotation,
+                            i,
+                        )
+                        ax_i.annotate(
+                            f"${to_str(obs_i, Q=Q_i_label)}$",
+                            **kwargs,
+                        )
+                    # ... or as ylabel
+                    elif pdf_label == "ylabel":
+                        ax_i.set_ylabel(
+                            f"${to_str(obs_i, Q=Q_i_label)}$", **kwargs_ylabel
+                        )
+
+                    ax_i.set_xlabel("$x$", **kwargs_xlabel)
+
+            # add the legend
+            if legend:
+                kwargs_default = {
+                    "loc": "upper left",
+                    "bbox_to_anchor": (0.63, 1.02),
+                }
+                kwargs = update_kwargs(
+                    kwargs_default,
+                    kwargs_legend,
+                )
+                ax_i.figure.legend(
+                    lines,
+                    [f"$A = {A_i}$ ({element_to_str(A_i)})" for A_i in A],
+                    **kwargs,
+                )
+
     def plot_A_dep_pseudo_3d(
         self,
         ax: plt.Axes | npt.NDArray[plt.Axes],  # pyright: ignore[reportInvalidTypeForm]
