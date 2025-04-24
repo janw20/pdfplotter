@@ -394,7 +394,9 @@ class NuclearPDFSet(PDFSet):
 
                     # add the ylabel
                     if pdf_label == "ylabel":
-                        ax_i.set_ylabel(f"${to_str(obs_i, Q=Q_i_label)}$", **kwargs_ylabel)
+                        ax_i.set_ylabel(
+                            f"${to_str(obs_i, Q=Q_i_label)}$", **kwargs_ylabel
+                        )
 
             # add the legend
             if legend:
