@@ -332,7 +332,7 @@ class NuclearPDFSet(PDFSet):
         kwargs_uncertainty: dict[str, Any] | list[dict[str, Any] | None] = {},
         kwargs_uncertainty_edges: dict[str, Any] | list[dict[str, Any] | None] = {},
         kwargs_spines: dict[str, Any] | list[dict[str, Any] | None] = {},
-        kwargs_annotation: dict[str, Any] | list[dict[str, Any] | None] = {},
+        kwargs_annotation: dict[str, Any] = {},
         kwargs_xlabel: dict[str, Any] = {},
         kwargs_ylabel: dict[str, Any] = {},
         kwargs_legend: dict[str, Any] = {},
@@ -539,7 +539,6 @@ class NuclearPDFSet(PDFSet):
                         kwargs = update_kwargs(
                             kwargs_default,
                             kwargs_annotation,
-                            i,
                         )
                         ax_i.annotate(
                             f"${to_str(obs_i, Q=Q_i_label)}$",
