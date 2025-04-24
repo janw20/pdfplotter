@@ -181,8 +181,6 @@ class NuclearPDFSet(PDFSet):
         if not isinstance(ax, np.ndarray):
             ax = np.array([ax])
 
-        np.nan
-
         if not isinstance(observable, list):
             observable = [observable]
 
