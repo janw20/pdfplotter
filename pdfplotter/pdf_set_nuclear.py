@@ -358,17 +358,18 @@ class NuclearPDFSet(PDFSet):
                             "color": col,
                             "alpha": 0.3,
                         }
-                        kwargs_uncertainty = update_kwargs(
+                        kwargs_u = update_kwargs(
                             kwargs_uncertainty_default,
                             kwargs_uncertainty,
                             i=j,
                         )
                         ax_m.fill_between(
                             my_data[obs_m].query(f"x=={x}")["A"],
-                            my_data[obs_m].query(f"x=={x}")["unc1"],
-                            my_data[obs_m].query(f"x=={x}")["unc2"],
-                            **kwargs_uncertainty,
+                            my_data[obs_m].query(f"x=={x}")["unc1"]/ np.array(my_data[obs_m].query(f"A=={1} & x=={x}")["central"]),
+                            my_data[obs_m].query(f"x=={x}")["unc2"]/ np.array(my_data[obs_m].query(f"A=={1} & x=={x}")["central"]),
+                            **kwargs_u,
                         )
+                        
             kwargs_xlabel_default = {
                 "fontsize": 14,
                 "xlabel": "$A$",
