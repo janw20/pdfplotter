@@ -161,16 +161,17 @@ class NuclearPDFSet(PDFSet):
             else:
                 return pdf_set.iloc[0]["pdf_set"]
 
-    def plot_Af_plane(
+    def plot_A_dep_vs_A_xfixed(
         self,
         ax: plt.Axes | npt.NDArray[plt.Axes],  # pyright: ignore[reportInvalidTypeForm]
-        x_vals: float | list[float],
+        x: float | list[float],
         observables: (
             sp.Basic
             | npt.NDArray[sp.Basic]  # pyright: ignore[reportInvalidTypeForm]
-            | list[sp.Basic] 
+            | list[sp.Basic]
         ),
-        Q: float = 2,
+        Q: float | None = None,
+        Q2: float | None = None,
         colors: list = [],
         logx: bool = True,
         title: str | list[str] | None = None,
@@ -184,22 +185,25 @@ class NuclearPDFSet(PDFSet):
         kwargs_title: dict[str, Any] = {},
         kwargs_notation: dict[str, Any] | list[dict[str, Any] | None] = {},
         kwargs_uncertainty: dict[str, Any] | list[dict[str, Any] | None] = {},
+        kwargs_uncertainty_edges: dict[str, Any] | list[dict[str, Any] | None] = {},
     ) -> None:
         """Plot nuclear PDFs in the A-f plane for different values of x.
-        
+
         Parameters
         ----------
         ax : matplotlib.axes.Axes | numpy.ndarray[matplotlib.axes.Axes]
             The axes to plot on.
-        x_vals : float | list[float]
+        x : float | list[float]
             The x values to plot for.
         observables : sympy.Basic | numpy.ndarray[sympy.Basic] | list[sympy.Basic]
             The observables to plot.
         Q : float, optional
-            The scale at which to plot the PDFs, by default 2.
+            The scale at which to plot the PDFs
+        Q2 : float, optional
+            The Q^2 scale at which to plot the PDFs. Either Q or Q2 has to be passed.
         colors : list, optional
-            The colors to use for the different x values, by default [] and seaborn color palette viridis is used if == [].
-        logx : bool, optional   
+            The colors to use for the different x values, by default [], tab color palette is used if == [].
+        logx : bool, optional
             If True, use a logarithmic scale for the x axis, by default True.
         title : str | list[str] | None, optional
             The title of the plot, by default None. If a list is passed, the titles are set for each subplot. If a single string is passed, it is set for the first subplot.
@@ -209,7 +213,7 @@ class NuclearPDFSet(PDFSet):
             If True, plot the ratio of the PDFs to the Proon PDF, by default False.
         pdf_label : str, optional
             The label for the PDF, by default "annotate". If "ylabel", the label is set as the y-axis label. If "annotate", the label is set as an annotation in the top right corner of the plot.
-        kwargs_theory : dict[str, Any] | list[dict[str, Any] | None], optional 
+        kwargs_theory : dict[str, Any] | list[dict[str, Any] | None], optional
             The keyword arguments to pass to the plot function for the central PDF, by default {}.
         kwargs_legend : dict[str, Any], optional
             The keyword arguments to pass to the legend function, by default {}.
@@ -223,21 +227,41 @@ class NuclearPDFSet(PDFSet):
             The keyword arguments to pass to the annotation function, by default {}.
         kwargs_uncertainty : dict[str, Any] | list[dict[str, Any] | None], optional
             The keyword arguments to pass to the fill_between function for the uncertainties, by default {}.
-      
+        kwargs_uncertainty_edges : dict[str, Any] | list[dict[str, Any] | None], optional
+            The keyword arguments to pass to the plot function for the uncertainty edges, by default {}.
         """
 
         my_sets = self.pdf_sets
         my_data = {}
 
-        if not isinstance(x_vals, list):
-            x_vals = [x_vals]
+        if not isinstance(x, list):
+            x = [x]
 
-        for x in x_vals:
-            if x not in self.get(A=my_sets["A"][0]).x_values:
+        for x_i in x:
+            if x_i not in self.get(A=my_sets["A"][0]).x_values:
                 raise ValueError(
-                    f"Chosen x value {x} was not used for defining nuclear pdf set. \n Pleas choose x that was used in initialising"
+                    f"Chosen x value {x_i} was not used for defining nuclear pdf set. \n Pleas choose x that was used in initialization"
                 )
 
+        if Q is None and Q2 is None:
+            raise ValueError("Please pass either `Q` or `Q2`")
+
+        elif Q is not None and Q2 is not None:
+            raise ValueError("Please pass either `Q` or `Q2`, not both")
+
+        elif Q is not None:
+            if Q not in self.get(A=my_sets["A"][0]).Q_values and Q not in np.sqrt(np.array(self.get(A=my_sets["A"][0]).Q2_values)):
+                raise ValueError(
+                    f"Chosen Q value {Q} was not used for defining nuclear pdf set. \n Please choose Q that was used in initialization"
+                )
+        else:
+            if (
+                Q2 not in self.get(A=my_sets["A"][0]).Q2_values
+                and Q2 not in np.array(self.get(A=my_sets["A"][0]).Q_values) ** 2
+            ):
+                raise ValueError(
+                    f"Chosen Q2 value {Q2} was not used for defining nuclear pdf set. \n Please choose Q2 that was used in initialization"
+                )
         if isinstance(observables, np.ndarray):
             observables = list(observables.flatten())
 
@@ -245,9 +269,9 @@ class NuclearPDFSet(PDFSet):
             observables = [observables]
 
         if colors == []:
-            colors = sns.color_palette("viridis", n_colors=len(x_vals))
+            colors = plt.get_cmap("tab10", lut=len(x)).colors
 
-        if len(colors) != len(x_vals):
+        if len(colors) != len(x):
             raise ValueError("No. of colors must match no. of x-values")
 
         for obs in observables:
@@ -258,22 +282,26 @@ class NuclearPDFSet(PDFSet):
             list_unc2 = []
             list_A = []
             for A in my_sets["A"]:
-                for x in self.get(A=A).x_values:
-                    list_x.append(x)
+                for x_i in self.get(A=A).x_values:
+                    list_x.append(x_i)
                     list_central.append(
-                        self.get(A=A).get_central(x=x, Q=Q, observable=obs)
+                        self.get(A=A).get_central(x=x_i, Q=Q, Q2=Q2, observable=obs)
                     )
-                    unc1 = self.get(A=A).get_uncertainties(x=x, Q=Q, observable=obs)[0]
-                    unc2 = self.get(A=A).get_uncertainties(x=x, Q=Q, observable=obs)[1]
+                    unc1 = self.get(A=A).get_uncertainties(
+                        x=x_i, Q=Q, Q2=Q2, observable=obs
+                    )[0]
+                    unc2 = self.get(A=A).get_uncertainties(
+                        x=x_i, Q=Q, Q2=Q2, observable=obs
+                    )[1]
                     if math.isnan(unc1):
                         list_unc1.append(
-                            self.get(A=A).get_central(x=x, Q=Q, observable=obs)
+                            self.get(A=A).get_central(x=x_i, Q=Q, Q2=Q2, observable=obs)
                         )
                     else:
                         list_unc1.append(unc1)
                     if math.isnan(unc2):
                         list_unc2.append(
-                            self.get(A=A).get_central(x=x, Q=Q, observable=obs)
+                            self.get(A=A).get_central(x=x_i, Q=Q, Q2=Q2, observable=obs)
                         )
                     else:
                         list_unc2.append(unc2)
@@ -300,10 +328,10 @@ class NuclearPDFSet(PDFSet):
             ax_m: plt.Axes
 
             if not plot_ratio:
-                for j, (x, col) in enumerate(zip(x_vals, colors)):
+                for j, (x_j, col) in enumerate(zip(x, colors)):
                     kwargs_default = {
                         "color": col,
-                        "label": f"x={x}",
+                        "label": f"x={x_j}",
                         "linewidth": 1.5,
                     }
                     kwargs = update_kwargs(
@@ -312,8 +340,8 @@ class NuclearPDFSet(PDFSet):
                         i=j,
                     )
                     ax_m.plot(
-                        my_data[obs_m].query(f"x=={x}")["A"],
-                        my_data[obs_m].query(f"x=={x}")["central"],
+                        my_data[obs_m].query(f"x=={x_j}")["A"],
+                        my_data[obs_m].query(f"x=={x_j}")["central"],
                         **kwargs,
                     )
 
@@ -328,17 +356,35 @@ class NuclearPDFSet(PDFSet):
                             i=j,
                         )
                         ax_m.fill_between(
-                            my_data[obs_m].query(f"x=={x}")["A"],
-                            my_data[obs_m].query(f"x=={x}")["unc1"],
-                            my_data[obs_m].query(f"x=={x}")["unc2"],
+                            my_data[obs_m].query(f"x=={x_j}")["A"],
+                            my_data[obs_m].query(f"x=={x_j}")["unc1"],
+                            my_data[obs_m].query(f"x=={x_j}")["unc2"],
                             **kwargs_u,
                         )
-
+                        kwargs_uncertainty_edges_default = {
+                            "color": col,
+                            "linestyle": "solid",
+                        }
+                        kwargs_u_e = update_kwargs(
+                            kwargs_uncertainty_edges_default,
+                            kwargs_uncertainty_edges,
+                            i=j,
+                        )
+                        ax_m.plot(
+                            my_data[obs_m].query(f"x=={x_j}")["A"],
+                            my_data[obs_m].query(f"x=={x_j}")["unc1"],
+                            **kwargs_u_e,
+                        )
+                        ax_m.plot(
+                            my_data[obs_m].query(f"x=={x_j}")["A"],
+                            my_data[obs_m].query(f"x=={x_j}")["unc2"],
+                            **kwargs_u_e,
+                        )
             else:
-                for j, (x, col) in enumerate(zip(x_vals, colors)):
+                for j, (x_j, col) in enumerate(zip(x, colors)):
                     kwargs_default = {
                         "color": col,
-                        "label": f"x={x}",
+                        "label": f"x={x_j}",
                         "linewidth": 1.5,
                     }
                     kwargs = update_kwargs(
@@ -347,9 +393,11 @@ class NuclearPDFSet(PDFSet):
                         i=j,
                     )
                     ax_m.plot(
-                        my_data[obs_m].query(f"x=={x}")["A"],
-                        np.array(my_data[obs_m].query(f"x=={x}")["central"])
-                        / np.array(my_data[obs_m].query(f"A=={1} & x=={x}")["central"]),
+                        my_data[obs_m].query(f"x=={x_j}")["A"],
+                        np.array(my_data[obs_m].query(f"x=={x_j}")["central"])
+                        / np.array(
+                            my_data[obs_m].query(f"A=={1} & x=={x_j}")["central"]
+                        ),
                         **kwargs,
                     )
 
@@ -364,12 +412,42 @@ class NuclearPDFSet(PDFSet):
                             i=j,
                         )
                         ax_m.fill_between(
-                            my_data[obs_m].query(f"x=={x}")["A"],
-                            my_data[obs_m].query(f"x=={x}")["unc1"]/ np.array(my_data[obs_m].query(f"A=={1} & x=={x}")["central"]),
-                            my_data[obs_m].query(f"x=={x}")["unc2"]/ np.array(my_data[obs_m].query(f"A=={1} & x=={x}")["central"]),
+                            my_data[obs_m].query(f"x=={x_j}")["A"],
+                            my_data[obs_m].query(f"x=={x_j}")["unc1"]
+                            / np.array(
+                                my_data[obs_m].query(f"A=={1} & x=={x_j}")["central"]
+                            ),
+                            my_data[obs_m].query(f"x=={x_j}")["unc2"]
+                            / np.array(
+                                my_data[obs_m].query(f"A=={1} & x=={x_j}")["central"]
+                            ),
                             **kwargs_u,
                         )
-                        
+                        kwargs_uncertainty_edges_default = {
+                            "color": col,
+                            "linestyle": "solid",
+                            "alpha": 1,
+                        }
+                        kwargs_u_e = update_kwargs(
+                            kwargs_uncertainty_edges_default,
+                            kwargs_uncertainty_edges,
+                            i=j,
+                        )
+                        ax_m.plot(
+                            my_data[obs_m].query(f"x=={x_j}")["A"],
+                            my_data[obs_m].query(f"x=={x_j}")["unc1"]/ np.array(
+                                my_data[obs_m].query(f"A=={1} & x=={x_j}")["central"]
+                            ),
+                            **kwargs_u_e,
+                        )
+                        ax_m.plot(
+                            my_data[obs_m].query(f"x=={x_j}")["A"],
+                            my_data[obs_m].query(f"x=={x_j}")["unc2"]/ np.array(
+                                my_data[obs_m].query(f"A=={1} & x=={x_j}")["central"]
+                            ),
+                            **kwargs_u_e,
+                        )
+
             kwargs_xlabel_default = {
                 "fontsize": 14,
                 "xlabel": "$A$",
@@ -410,12 +488,12 @@ class NuclearPDFSet(PDFSet):
                     ),
                 }
                 kwargs_n = update_kwargs(kwargs_notation_default, kwargs_notation, i=m)
-                ax_m.annotate(f"${util.to_str(obs_m, Q=Q)}$", **kwargs_n)
+                ax_m.annotate(f"${util.to_str(obs_m, Q=Q,Q2=Q2)}$", **kwargs_n)
 
             if pdf_label == "ylabel":
                 kwargs_ylabel_default = {
                     "fontsize": 14,
-                    "ylabel": f"${util.to_str(obs_m, Q=Q)}$",
+                    "ylabel": f"${util.to_str(obs_m,Q=Q,Q2=Q2)}$",
                 }
                 kwargs_y = update_kwargs(kwargs_ylabel_default, kwargs_ylabel, i=m)
                 ax_m.set_ylabel(**kwargs_y)
@@ -424,11 +502,7 @@ class NuclearPDFSet(PDFSet):
                 ax_m.set_xscale("log")
 
         if title:
-            kwargs_title_default = {
-                "fontsize": 20,
-                "y": 1.05,
-                "loc": "center"
-            }
+            kwargs_title_default = {"fontsize": 20, "y": 1.05, "loc": "center"}
             kwargs_title = update_kwargs(
                 kwargs_title_default,
                 kwargs_title,
