@@ -175,13 +175,14 @@ class NuclearPDFSet(PDFSet):
         ),
         Q: float | None = None,
         Q2: float | None = None,
+        x_lines: float | list[float] | None = None,
         colors: list = [],
         logA: bool = True,
         plot_uncertainty: bool = True,
         plot_ratio: bool = False,
         pdf_label: Literal["ylabel", "annotate"] = "annotate",
         A_label: Literal["legend", "ticks"] = "ticks",
-        proj_type: Literal["ortho", "persp"] = "ortho",
+        proj_type: Literal["ortho", "persp"] = "persp",
         view_init: tuple[float, float] | list[tuple[float, float]] = (15, -75),
         kwargs_theory: dict[str, Any] | list[dict[str, Any] | None] = {},
         kwargs_uncertainty: dict[str, Any] | list[dict[str, Any] | None] = {},
@@ -192,6 +193,7 @@ class NuclearPDFSet(PDFSet):
         kwargs_xlabel: dict[str, Any]  = {},
         kwargs_zlabel: dict[str, Any]  = {},
         kwargs_legend: dict[str, Any]  = {},
+        kwargs_xlines: dict[str, Any] | list[dict[str, Any] | None]  = {},
     ):
 
         my_sets = self.pdf_sets
@@ -223,6 +225,11 @@ class NuclearPDFSet(PDFSet):
         if not isinstance(A, list):
             A = [A]
 
+        if 1 not in A and plot_ratio:
+            raise ValueError(
+                "Please pass A=1 if you want to plot the ratio to Proton."
+            )
+        
         if isinstance(observables, np.ndarray):
             observables = list(observables.flatten())
 
@@ -238,12 +245,17 @@ class NuclearPDFSet(PDFSet):
 
         for i, (obs_i, ax_i) in enumerate(zip(observables, ax.flat)):
 
-            ax_i.set_proj_type(proj_type)
-            ax_i.view_init(*view_init[i] if isinstance(view_init, list) else view_init)
             for j, (A_j, col_j) in enumerate(zip(A, colors)):
-                z_lower, z_upper = self.get(A=A_j).get_uncertainties(
-                    observable=obs_i, x=x, Q=Q, Q2=Q2
-                )
+                if not plot_ratio:
+                    z_lower, z_upper = self.get(A=A_j).get_uncertainties(
+                        observable=obs_i, x=x, Q=Q, Q2=Q2
+                    )
+                else:   
+                    z_lower, z_upper = self.get(A=A_j).get_uncertainties(
+                        observable=obs_i, x=x, Q=Q, Q2=Q2
+                    )
+                    z_lower = z_lower / self.get(A=1).get_central(observable=obs_i,x=x, Q=Q, Q2=Q2)
+                    z_upper = z_upper / self.get(A=1).get_central(observable=obs_i,x=x, Q=Q, Q2=Q2)
                 kwargs_default = {
                     "color": col_j,
                     "label": f"A={A_j}",
@@ -261,19 +273,37 @@ class NuclearPDFSet(PDFSet):
                         i=j,
                     )
                 if logA:
-                    ax_i.plot(
-                        np.log10(x),
-                        np.log10(len(x) * [A_j]),
-                        self.get(A=A_j).get_central(x=x, Q=Q, Q2=Q2, observable=obs_i),
-                        **kwargs,
-                    )
+                    if plot_ratio:
+                        ax_i.plot(
+                            np.log10(x),
+                            np.log10(len(x) * [A_j]),
+                            self.get(A=A_j).get_central(x=x, Q=Q, Q2=Q2, observable=obs_i)
+                            / self.get(A=1).get_central(x=x, Q=Q, Q2=Q2, observable=obs_i),
+                            **kwargs,
+                        )
+                    else:
+                        ax_i.plot(
+                            np.log10(x),
+                            np.log10(len(x) * [A_j]),
+                            self.get(A=A_j).get_central(x=x, Q=Q, Q2=Q2, observable=obs_i),
+                            **kwargs,
+                        )
                 else:
-                    ax_i.plot(
-                        np.log10(x),
-                        len(x) * [A_j],
-                        self.get(A=A_j).get_central(x=x, Q=Q, Q2=Q2, observable=obs_i),
-                        **kwargs,
-                    )       
+                    if plot_ratio:
+                        ax_i.plot(
+                            np.log10(x),
+                            len(x) * [A_j],
+                            self.get(A=A_j).get_central(x=x, Q=Q, Q2=Q2, observable=obs_i)
+                            / self.get(A=1).get_central(x=x, Q=Q, Q2=Q2, observable=obs_i),
+                            **kwargs,
+                        )
+                    else:
+                        ax_i.plot(
+                            np.log10(x),
+                            len(x) * [A_j],
+                            self.get(A=A_j).get_central(x=x, Q=Q, Q2=Q2, observable=obs_i),
+                            **kwargs,
+                        )    
                 if plot_uncertainty:
                     kwargs_uncertainty_default = {
                         "color": col_j,
@@ -295,15 +325,16 @@ class NuclearPDFSet(PDFSet):
                     z_lower = np.array(z_lower)
                     z_upper = np.array(z_upper)
                     if not logA:
+
                         for xi, ai, zl, zu in zip(
                             np.log10(x), np.ones(len(x)) * A_j, z_lower, z_upper
                         ):
                             vertices.append([xi, ai, zl])
-
                         for xi, ai, zl, zu in reversed(
                             list(zip(np.log10(x), np.ones(len(x)) * A_j, z_lower, z_upper))
                         ):
                             vertices.append([xi, ai, zu])
+                        
                     else:
                         for xi, ai, zl, zu in zip(
                             np.log10(x), np.ones(len(x)) * np.log10(A_j), z_lower, z_upper
@@ -338,6 +369,50 @@ class NuclearPDFSet(PDFSet):
                     else:
                         ax_i.plot(np.log10(x), len(x) * [np.log10(A_j)], z_upper, **kwargs)
                         ax_i.plot(np.log10(x), len(x) * [np.log10(A_j)], z_lower, **kwargs)
+
+            centrals={}
+            if x_lines is not None:
+                if not isinstance(x_lines, list):
+                    x_lines = [x_lines]
+                for k,x_line in enumerate(x_lines):
+                    if x_line not in x:
+                        raise ValueError(
+                            f"Chosen x value {x_line} was not used for defining nuclear pdf set. \n Please choose x that was used in initialization"
+                        )
+                    kwargs_xlines_default = {
+                        "color": "black",
+                        "linestyle": "--",
+                        "linewidth": 1.5,
+                    }
+                    if not isinstance(kwargs_xlines, list):
+                        kwargs = update_kwargs(
+                            kwargs_xlines_default,
+                            kwargs_xlines,
+                        )
+                    else:
+                        kwargs = update_kwargs(
+                            kwargs_xlines_default,
+                            kwargs_xlines,
+                            i=k,
+                        )
+                    for a in A:
+                        if not plot_ratio:
+                            if x_line not in centrals.keys():
+                                centrals[x_line] = [self.get(A=a).get_central(x=x_line, Q=Q, Q2=Q2, observable=obs_i)]
+                            else:
+                                centrals[x_line].append(self.get(A=a).get_central(x=x_line, Q=Q, Q2=Q2, observable=obs_i))
+                        else:
+                            if x_line not in centrals.keys():
+                                centrals[x_line] = [self.get(A=a).get_central(x=x_line, Q=Q, Q2=Q2, observable=obs_i)/self.get(A=1).get_central(x=x_line, Q=Q, Q2=Q2, observable=obs_i)]
+                            else:
+                                centrals[x_line].append(self.get(A=a).get_central(x=x_line, Q=Q, Q2=Q2, observable=obs_i)/self.get(A=1).get_central(x=x_line, Q=Q, Q2=Q2, observable=obs_i))
+                    if logA:
+                        ax_i.plot(
+                            np.ones(len(A))*np.log10(x_line), np.log10(A), centrals[x_line],**kwargs)    
+                    else:
+                        ax_i.plot(
+                            np.ones(len(A))*np.log10(x_line), A, centrals[x_line],**kwargs)            
+
             if pdf_label == "annotate":
                 kwargs_notation_default = {
                     "fontsize": 12,
@@ -369,7 +444,6 @@ class NuclearPDFSet(PDFSet):
                 kwargs_ylabel_default = {
                     "fontsize": 14,
                     "zlabel": f"${util.to_str(obs_i,Q=Q,Q2=Q2)}$",
-                    #"labelpad":-200
                 }
                 if not isinstance(kwargs_ylabel, list):
                     kwargs = update_kwargs(
@@ -433,7 +507,8 @@ class NuclearPDFSet(PDFSet):
                 kwargs_zlabel_default = {
                     "fontsize": 14,
                     "ylabel": f"$A$",
-                    "labelpad":-10
+                    "labelpad":-10,
+                    "linespacing": -4
                 }
                 kwargs = update_kwargs(
                     kwargs_zlabel_default,
@@ -443,9 +518,9 @@ class NuclearPDFSet(PDFSet):
             ax_i.xaxis.pane.fill=False   
             ax_i.yaxis.pane.fill=False   
             ax_i.zaxis.pane.fill=False   
-            ax_i.xaxis.pane.set_edgecolor("white")
-            ax_i.yaxis.pane.set_edgecolor("white")
-            ax_i.zaxis.pane.set_edgecolor("white")
+            ax_i.xaxis.pane.set_edgecolor("w")
+            ax_i.yaxis.pane.set_edgecolor("w")
+            ax_i.zaxis.pane.set_edgecolor("w")
 
             ax_i.zaxis._axinfo["juggled"]=(1,2,0)
 
@@ -459,3 +534,7 @@ class NuclearPDFSet(PDFSet):
                 kwargs_xlabel,
             )
             ax_i.set_xlabel(**kwargs)
+            ax_i.set_xlim(np.log10(x[0])-np.log10(x[0])/100, np.log10(x[-1]))
+            ax_i.yaxis._axinfo["grid"]["linewidth"] = 0
+            ax_i.set_proj_type(proj_type)
+            ax_i.view_init(*view_init[i] if isinstance(view_init, list) else view_init)
