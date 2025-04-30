@@ -1,20 +1,25 @@
 from __future__ import annotations
 
-from itertools import zip_longest
+from itertools import zip_longest, cycle
 from typing import Sequence, Any, Literal
 
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
 import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+import matplotlib.colors as cls
+from matplotlib import ticker as mticker
 import sympy as sp
 import math
 import seaborn as sns
+from sympy import rotations
 from pdfplotter import util
-from pdfplotter.util import update_kwargs
+from pdfplotter.util import tick_formatter_exp_to_int, update_kwargs
+from pdfplotter.util import log_tick_formatter
 
 from pdfplotter.pdf_set import PDFSet
-from pdfplotter import flavors
+from pdfplotter import elements
 
 
 class NuclearPDFSet(PDFSet):
@@ -159,7 +164,9 @@ class NuclearPDFSet(PDFSet):
             elif pdf_set.shape[0] > 1:
                 raise ValueError(f"Multiple PDFSets found for Z = {Z}")
             else:
-                return pdf_set.iloc[0]["pdf_set"]
+                return pdf_set.iloc[0][
+                    "pdf_set"
+                ]  # pyright: ignore[reportInvalidTypeForm]
 
     def plot_A_dep_vs_A_xfixed(
         self,
@@ -172,18 +179,23 @@ class NuclearPDFSet(PDFSet):
         ),
         Q: float | None = None,
         Q2: float | None = None,
-        colors: list = [],
+        A_lines: float | list[float] | None = None,
+        colors: list[str] | str | cycle = [],
+        cmap: str = "viridis",
+        labels_Bjx: Literal["colorbar", "legend","none"]  = "legend",
         logx: bool = True,
         title: str | list[str] | None = None,
         plot_unc: bool = False,
         plot_ratio: bool = False,
-        pdf_label: Literal["ylabel", "annotate"] = "annotate",
+        pdf_label: Literal["ylabel", "annotate"] | None = "annotate",
+        plot_legend: bool = True,
+        legend_labels: Literal["PDFSet", "x", "Both"] = "x",
         kwargs_theory: dict[str, Any] | list[dict[str, Any] | None] = {},
         kwargs_legend: dict[str, Any] = {},
         kwargs_xlabel: dict[str, Any] = {},
         kwargs_ylabel: dict[str, Any] | list[dict[str, Any] | None] = {},
         kwargs_title: dict[str, Any] = {},
-        kwargs_notation: dict[str, Any] | list[dict[str, Any] | None] = {},
+        kwargs_annotate: dict[str, Any] | list[dict[str, Any] | None] = {},
         kwargs_uncertainty: dict[str, Any] | list[dict[str, Any] | None] = {},
         kwargs_uncertainty_edges: dict[str, Any] | list[dict[str, Any] | None] = {},
     ) -> None:
@@ -212,7 +224,7 @@ class NuclearPDFSet(PDFSet):
         plot_ratio : bool, optional
             If True, plot the ratio of the PDFs to the Proon PDF, by default False.
         pdf_label : str, optional
-            The label for the PDF, by default "annotate". If "ylabel", the label is set as the y-axis label. If "annotate", the label is set as an annotation in the top right corner of the plot.
+            The label for the PDF, by default "annotate". If "ylabel", the label is set as the y-axis label. If "annotate", the label is set as an anannotate in the top right corner of the plot.
         kwargs_theory : dict[str, Any] | list[dict[str, Any] | None], optional
             The keyword arguments to pass to the plot function for the central PDF, by default {}.
         kwargs_legend : dict[str, Any], optional
@@ -223,8 +235,8 @@ class NuclearPDFSet(PDFSet):
             The keyword arguments to pass to the ylabel function, by default {}.
         kwargs_title : dict[str, Any], optional
             The keyword arguments to pass to the title function, by default {}.
-        kwargs_notation : dict[str, Any] | list[dict[str, Any] | None], optional
-            The keyword arguments to pass to the annotation function, by default {}.
+        kwargs_annotate : dict[str, Any] | list[dict[str, Any] | None], optional
+            The keyword arguments to pass to the anannotate function, by default {}.
         kwargs_uncertainty : dict[str, Any] | list[dict[str, Any] | None], optional
             The keyword arguments to pass to the fill_between function for the uncertainties, by default {}.
         kwargs_uncertainty_edges : dict[str, Any] | list[dict[str, Any] | None], optional
@@ -250,7 +262,9 @@ class NuclearPDFSet(PDFSet):
             raise ValueError("Please pass either `Q` or `Q2`, not both")
 
         elif Q is not None:
-            if Q not in self.get(A=my_sets["A"][0]).Q_values and Q not in np.sqrt(np.array(self.get(A=my_sets["A"][0]).Q2_values)):
+            if Q not in self.get(A=my_sets["A"][0]).Q_values and Q not in np.sqrt(
+                np.array(self.get(A=my_sets["A"][0]).Q2_values)
+            ):
                 raise ValueError(
                     f"Chosen Q value {Q} was not used for defining nuclear pdf set. \n Please choose Q that was used in initialization"
                 )
@@ -268,11 +282,12 @@ class NuclearPDFSet(PDFSet):
         if not isinstance(observables, list):
             observables = [observables]
 
-        if colors == []:
-            colors = plt.get_cmap("tab10", lut=len(x)).colors
+        if isinstance(colors, str):
+            colors = len(x) * [colors]
 
-        if len(colors) != len(x):
-            raise ValueError("No. of colors must match no. of x-values")
+        elif isinstance(colors, list) and colors != []:
+            if len(colors) != len(x):
+                raise ValueError("No. of colors must match no. of x-values")
 
         for obs in observables:
             data_obs = {}
@@ -327,12 +342,26 @@ class NuclearPDFSet(PDFSet):
         for m, (obs_m, ax_m) in enumerate(zip(observables, ax.flat)):
             ax_m: plt.Axes
 
+            if labels_Bjx == "legend":
+                if colors == []:
+                    colors = cycle(plt.rcParams["axes.prop_cycle"].by_key()["color"])
+            else:
+                if colors == []:
+                    colors = cycle(
+                        [cm.get_cmap(cmap, lut=len(x))(i) for i in range(len(x))]
+                    )
+
             if not plot_ratio:
-                for j, (x_j, col) in enumerate(zip(x, colors)):
+                for j, x_j in enumerate(x):
+                    if isinstance(colors, str):
+                        col = colors
+                    elif isinstance(colors, list):
+                        col = colors[j]
+                    else:
+                        col = next(colors)
                     kwargs_default = {
                         "color": col,
                         "label": f"x={x_j}",
-                        "linewidth": 1.5,
                     }
                     kwargs = update_kwargs(
                         kwargs_default,
@@ -348,7 +377,7 @@ class NuclearPDFSet(PDFSet):
                     if plot_unc:
                         kwargs_uncertainty_default = {
                             "color": col,
-                            "alpha": 0.3,
+                            "alpha": 0.2,
                         }
                         kwargs_u = update_kwargs(
                             kwargs_uncertainty_default,
@@ -363,13 +392,19 @@ class NuclearPDFSet(PDFSet):
                         )
                         kwargs_uncertainty_edges_default = {
                             "color": col,
-                            "linestyle": "solid",
+                            "linewidth": 0.5,
                         }
-                        kwargs_u_e = update_kwargs(
-                            kwargs_uncertainty_edges_default,
-                            kwargs_uncertainty_edges,
-                            i=j,
-                        )
+                        if isinstance(kwargs_uncertainty_edges, list):
+                            kwargs_u_e = update_kwargs(
+                                kwargs_uncertainty_edges_default,
+                                kwargs_uncertainty_edges,
+                                i=j,
+                            )
+                        else:
+                            kwargs_u_e = update_kwargs(
+                                kwargs_uncertainty_edges_default,
+                                kwargs_uncertainty_edges,
+                            )
                         ax_m.plot(
                             my_data[obs_m].query(f"x=={x_j}")["A"],
                             my_data[obs_m].query(f"x=={x_j}")["unc1"],
@@ -382,10 +417,15 @@ class NuclearPDFSet(PDFSet):
                         )
             else:
                 for j, (x_j, col) in enumerate(zip(x, colors)):
+                    if isinstance(colors, str):
+                        col = colors
+                    elif isinstance(colors, list):
+                        col = colors[j]
+                    else:
+                        col = next(colors)
                     kwargs_default = {
                         "color": col,
                         "label": f"x={x_j}",
-                        "linewidth": 1.5,
                     }
                     kwargs = update_kwargs(
                         kwargs_default,
@@ -404,7 +444,7 @@ class NuclearPDFSet(PDFSet):
                     if plot_unc:
                         kwargs_uncertainty_default = {
                             "color": col,
-                            "alpha": 0.3,
+                            "alpha": 0.2,
                         }
                         kwargs_u = update_kwargs(
                             kwargs_uncertainty_default,
@@ -425,31 +465,63 @@ class NuclearPDFSet(PDFSet):
                         )
                         kwargs_uncertainty_edges_default = {
                             "color": col,
-                            "linestyle": "solid",
-                            "alpha": 1,
+                            "linewidth": 0.5,
                         }
-                        kwargs_u_e = update_kwargs(
-                            kwargs_uncertainty_edges_default,
-                            kwargs_uncertainty_edges,
-                            i=j,
-                        )
+                        if isinstance(kwargs_uncertainty_edges, list):
+                            kwargs_u_e = update_kwargs(
+                                kwargs_uncertainty_edges_default,
+                                kwargs_uncertainty_edges,
+                                i=j,
+                            )
+                        else:
+                            kwargs_u_e = update_kwargs(
+                                kwargs_uncertainty_edges_default,
+                                kwargs_uncertainty_edges,
+                            )
                         ax_m.plot(
                             my_data[obs_m].query(f"x=={x_j}")["A"],
-                            my_data[obs_m].query(f"x=={x_j}")["unc1"]/ np.array(
+                            my_data[obs_m].query(f"x=={x_j}")["unc1"]
+                            / np.array(
                                 my_data[obs_m].query(f"A=={1} & x=={x_j}")["central"]
                             ),
                             **kwargs_u_e,
                         )
                         ax_m.plot(
                             my_data[obs_m].query(f"x=={x_j}")["A"],
-                            my_data[obs_m].query(f"x=={x_j}")["unc2"]/ np.array(
+                            my_data[obs_m].query(f"x=={x_j}")["unc2"]
+                            / np.array(
                                 my_data[obs_m].query(f"A=={1} & x=={x_j}")["central"]
                             ),
                             **kwargs_u_e,
                         )
+            if logx:
+                ax_m.set_xscale("log")
 
+            if A_lines is not None:
+                if not isinstance(A_lines, list):
+                    A_lines = [A_lines]
+
+                for A_line in A_lines:
+                    ax_m.axvline(
+                        x=A_line,
+                        color="black",
+                        linestyle="--",
+                        linewidth=0.8,
+                    )
+                    #transform = ax_m.get_xaxis_transform()
+                    #ax_m.annotate(
+                    #    f"{elements.element_to_str(A=A_line,long=True)}",
+                    #    xy=(A_line, 0.03),
+                    #    xycoords=transform,
+                    #    rotation=90
+                    #)
+                ax_m.set_xticks(A_lines,labels=[f"{A_line} {elements.element_to_str(A=A_line,long=True)}" for A_line in A_lines],ha="left",rotation=-30)
+                ax_m.xaxis.set_tick_params(which="minor", size=0)
+            else:
+                ax_m.xaxis.set_major_formatter(
+                    mticker.FuncFormatter(tick_formatter_exp_to_int)
+                )
             kwargs_xlabel_default = {
-                "fontsize": 14,
                 "xlabel": "$A$",
             }
             kwargs_x = update_kwargs(
@@ -459,22 +531,36 @@ class NuclearPDFSet(PDFSet):
 
             ax_m.set_xlabel(**kwargs_x)
 
-            kwargs_legend_default = {
-                "fontsize": 12,
-                "loc": "upper left",
-                "bbox_to_anchor": (1, 1),
-                "frameon": False,
-            }
-            kwargs_legend = update_kwargs(
-                kwargs_legend_default,
-                kwargs_legend,
-            )
+            if labels_Bjx == "colorbar":
+                if m == len(ax.flat) - 1:
+                    norm = cls.LogNorm(vmin=min(x), vmax=(max(x)))
+                    sm = cm.ScalarMappable(cmap=cmap, norm=norm)
+                    sm.set_array([])
+                    if len(x) <= 7:
+                        ticks = list(x)
+                    else:
+                        ticks = np.linspace(min(x), max(x), 7)
+                    cbar = plt.colorbar(sm, ax=ax_m, ticks=ticks)
+                    #cbar.ax.yaxis.set_major_locator(mticker.FixedLocator(ticks))
+                    cbar.ax.set_yticklabels([f"{(x_i)}" for x_i in ticks])
+                    cbar.set_label("$x$", labelpad=15)
+            elif labels_Bjx == "legend":
+                if m == len(ax.flat) - 1:
+                    if plot_legend:
+                        kwargs_legend_default = {
+                            "loc": "upper left",
+                            "bbox_to_anchor": (1, 1),
+                            "frameon": False,
+                        }
+                        kwargs_legend = update_kwargs(
+                            kwargs_legend_default,
+                            kwargs_legend,
+                        )
 
-            if m == len(ax.flat) - 1:
-                ax_m.legend(**kwargs_legend)
+                        ax_m.legend(**kwargs_legend)
 
             if pdf_label == "annotate":
-                kwargs_notation_default = {
+                kwargs_annotate_default = {
                     "fontsize": 12,
                     "xy": (0.97, 0.96),
                     "xycoords": "axes fraction",
@@ -487,29 +573,35 @@ class NuclearPDFSet(PDFSet):
                         boxstyle="round, pad=0.2",
                     ),
                 }
-                kwargs_n = update_kwargs(kwargs_notation_default, kwargs_notation, i=m)
+                kwargs_n = update_kwargs(kwargs_annotate_default, kwargs_annotate, i=m)
                 ax_m.annotate(f"${util.to_str(obs_m, Q=Q,Q2=Q2)}$", **kwargs_n)
 
             if pdf_label == "ylabel":
                 kwargs_ylabel_default = {
-                    "fontsize": 14,
                     "ylabel": f"${util.to_str(obs_m,Q=Q,Q2=Q2)}$",
                 }
                 kwargs_y = update_kwargs(kwargs_ylabel_default, kwargs_ylabel, i=m)
                 ax_m.set_ylabel(**kwargs_y)
 
-            if logx:
-                ax_m.set_xscale("log")
+
+
 
         if title:
-            kwargs_title_default = {"fontsize": 20, "y": 1.05, "loc": "center"}
-            kwargs_title = update_kwargs(
-                kwargs_title_default,
-                kwargs_title,
-            )
 
             if isinstance(title, list):
+
                 for k, title_k in enumerate(title):
-                    ax.flatten()[k].set_title(f"{title_k}", **kwargs_title)
+                    kwargs_title_default = {"y": 1.05, "loc": "center","label":f"{title_k}"}
+                    kwargs_title = update_kwargs(
+                    kwargs_title_default,
+                    kwargs_title,
+                    i=k
+                    )
+                    ax.flatten()[k].set_title(**kwargs_title)
             else:
-                ax.flatten()[0].set_title(f"{title}", **kwargs_title)
+                kwargs_title_default = {"y": 1.05, "loc": "center","label":f"{title}"}
+                kwargs_title = update_kwargs(
+                kwargs_title_default,
+                kwargs_title,
+                    )
+                ax.flatten()[0].set_title(**kwargs_title)
