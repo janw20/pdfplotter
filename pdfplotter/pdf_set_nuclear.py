@@ -10,12 +10,19 @@ import matplotlib.pyplot as plt
 import matplotlib.cm as cm
 import matplotlib.colors as cls
 from matplotlib import ticker as mticker
+
+# from mpl_toolkits.axes_grid1.inset_locator import inset_axes
 import sympy as sp
 import math
 import seaborn as sns
 from sympy import rotations
 from pdfplotter import util
-from pdfplotter.util import tick_formatter_exp_to_int, update_kwargs
+from pdfplotter.util import (
+    log_tick_formatter_sci,
+    log_tick_formatter_sci,
+    update_kwargs,
+    tick_formatter_exp_to_int,
+)
 from pdfplotter.util import log_tick_formatter
 
 from pdfplotter.pdf_set import PDFSet
@@ -182,17 +189,17 @@ class NuclearPDFSet(PDFSet):
         A_lines: float | list[float] | None = None,
         colors: list[str] | str | cycle = [],
         cmap: str = "viridis",
-        labels_Bjx: Literal["colorbar", "legend","none"]  = "legend",
+        labels_Bjx: Literal["colorbar", "legend", "none"] = "legend",
         logx: bool = True,
         title: str | list[str] | None = None,
         plot_unc: bool = False,
         plot_ratio: bool = False,
-        pdf_label: Literal["ylabel", "annotate"] | None = "annotate",
+        pdf_label: Literal["ylabel", "annotate", "none"] | None = "annotate",
         plot_legend: bool = True,
         legend_labels: Literal["PDFSet", "x", "Both"] = "x",
         kwargs_theory: dict[str, Any] | list[dict[str, Any] | None] = {},
         kwargs_legend: dict[str, Any] = {},
-        kwargs_xlabel: dict[str, Any] = {},
+        kwargs_xlabel: dict[str, Any] | list[dict[str, Any] | None] = {},
         kwargs_ylabel: dict[str, Any] | list[dict[str, Any] | None] = {},
         kwargs_title: dict[str, Any] = {},
         kwargs_annotate: dict[str, Any] | list[dict[str, Any] | None] = {},
@@ -508,14 +515,22 @@ class NuclearPDFSet(PDFSet):
                         linestyle="--",
                         linewidth=0.8,
                     )
-                    #transform = ax_m.get_xaxis_transform()
-                    #ax_m.annotate(
+                    # transform = ax_m.get_xaxis_transform()
+                    # ax_m.annotate(
                     #    f"{elements.element_to_str(A=A_line,long=True)}",
                     #    xy=(A_line, 0.03),
                     #    xycoords=transform,
                     #    rotation=90
-                    #)
-                ax_m.set_xticks(A_lines,labels=[f"{A_line} {elements.element_to_str(A=A_line,long=True)}" for A_line in A_lines],ha="left",rotation=-30)
+                    # )
+                ax_m.set_xticks(
+                    A_lines,
+                    labels=[
+                        f"{A_line} {elements.element_to_str(A=A_line,long=True)}"
+                        for A_line in A_lines
+                    ],
+                    ha="left",
+                    rotation=-30,
+                )
                 ax_m.xaxis.set_tick_params(which="minor", size=0)
             else:
                 ax_m.xaxis.set_major_formatter(
@@ -524,26 +539,52 @@ class NuclearPDFSet(PDFSet):
             kwargs_xlabel_default = {
                 "xlabel": "$A$",
             }
-            kwargs_x = update_kwargs(
-                kwargs_xlabel_default,
-                kwargs_xlabel,
-            )
+            if isinstance(kwargs_xlabel, list):
+                kwargs_x = update_kwargs(kwargs_xlabel_default, kwargs_xlabel, i=m)
+            else:
+                kwargs_x = update_kwargs(
+                    kwargs_xlabel_default,
+                    kwargs_xlabel,
+                )
 
             ax_m.set_xlabel(**kwargs_x)
 
             if labels_Bjx == "colorbar":
                 if m == len(ax.flat) - 1:
-                    norm = cls.LogNorm(vmin=min(x), vmax=(max(x)))
+                    norm = cls.LogNorm(vmin=(min(x)), vmax=(max(x)))
                     sm = cm.ScalarMappable(cmap=cmap, norm=norm)
                     sm.set_array([])
-                    if len(x) <= 7:
-                        ticks = list(x)
-                    else:
-                        ticks = np.linspace(min(x), max(x), 7)
-                    cbar = plt.colorbar(sm, ax=ax_m, ticks=ticks)
-                    #cbar.ax.yaxis.set_major_locator(mticker.FixedLocator(ticks))
-                    cbar.ax.set_yticklabels([f"{(x_i)}" for x_i in ticks])
+                    cax = ax_m.inset_axes([1.05, 0, 0.07, 1])
+                    cax.set_yscale("log")
+                    cax.yaxis.set_tick_params(which="minor", size=0)
+                    cbar = plt.colorbar(sm, cax=cax)
                     cbar.set_label("$x$", labelpad=15)
+                    if len(x) <= 7:
+                        ticks = x
+                        cbar.ax.set_yticks(
+                            ticks,
+                            labels=[
+                                f"{x_i:.0e}" if x_i != round(x_i, 1) else f"{x_i}"
+                                for x_i in ticks
+                            ],
+                        )
+                    else:
+                        ticks = np.arange(
+                            int(np.min(np.log10(x))), int(np.max(np.log10(x))) + 1
+                        )
+
+                        cbar.ax.set_yticks(
+                            10.0 ** (ticks),
+                            labels=[
+                                (
+                                    f"{10.0**(x_i):.1e}"
+                                    if x_i not in [-1, 0]
+                                    else (f"{0.1}" if x_i == -1 else f"{1}")
+                                )
+                                for x_i in ticks
+                            ],
+                        )
+
             elif labels_Bjx == "legend":
                 if m == len(ax.flat) - 1:
                     if plot_legend:
@@ -580,28 +621,30 @@ class NuclearPDFSet(PDFSet):
                 kwargs_ylabel_default = {
                     "ylabel": f"${util.to_str(obs_m,Q=Q,Q2=Q2)}$",
                 }
-                kwargs_y = update_kwargs(kwargs_ylabel_default, kwargs_ylabel, i=m)
+                if isinstance(kwargs_ylabel, list):
+                    kwargs_y = update_kwargs(kwargs_ylabel_default, kwargs_ylabel, i=m)
+                else:
+                    kwargs_y = update_kwargs(kwargs_ylabel_default, kwargs_ylabel)
                 ax_m.set_ylabel(**kwargs_y)
-
-
-
 
         if title:
 
             if isinstance(title, list):
 
                 for k, title_k in enumerate(title):
-                    kwargs_title_default = {"y": 1.05, "loc": "center","label":f"{title_k}"}
+                    kwargs_title_default = {
+                        "y": 1.05,
+                        "loc": "center",
+                        "label": f"{title_k}",
+                    }
                     kwargs_title = update_kwargs(
-                    kwargs_title_default,
-                    kwargs_title,
-                    i=k
+                        kwargs_title_default, kwargs_title, i=k
                     )
                     ax.flatten()[k].set_title(**kwargs_title)
             else:
-                kwargs_title_default = {"y": 1.05, "loc": "center","label":f"{title}"}
+                kwargs_title_default = {"y": 1.05, "loc": "center", "label": f"{title}"}
                 kwargs_title = update_kwargs(
-                kwargs_title_default,
-                kwargs_title,
-                    )
+                    kwargs_title_default,
+                    kwargs_title,
+                )
                 ax.flatten()[0].set_title(**kwargs_title)
