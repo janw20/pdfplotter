@@ -4,9 +4,9 @@ from typing_extensions import cast
 
 import sympy as sp
 
-d, dbar, u, ubar, s, sbar, c, cbar, b, bbar, t, tbar, g = cast(
-    tuple[sp.Symbol, ...], sp.symbols("d d̅ u u̅ s s̅ c c̅ b b̅ t t̅ g")
-)
+flavors: tuple[sp.Symbol, ...] = sp.symbols("d d̅ u u̅ s s̅ c c̅ b b̅ t t̅ g")
+d, dbar, u, ubar, s, sbar, c, cbar, b, bbar, t, tbar, g = flavors
+
 u_v: sp.Basic = u - ubar  # pyright: ignore[reportOperatorIssue]
 d_v: sp.Basic = d - dbar  # pyright: ignore[reportOperatorIssue]
 
