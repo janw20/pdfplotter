@@ -492,18 +492,20 @@ class NuclearPDFSet(PDFSet):
                 )
 
                 ax_i.set_ylabel(**kwargs)
+                ax_i.set_xlim(np.log10(x[0])*0.98)
             else:
                 ax_i.set_yticks([])
-                kwargs_legend_default = {
-                    "fontsize": 12,
-                    "bbox_to_anchor": (0.95, 0.95),
-                    "frameon": False,
-                }
-                kwargs = update_kwargs(
-                    kwargs_legend_default,
-                    kwargs_legend,
-                )
-                ax_i.legend()
+                if i==len(observables)-1:
+                    kwargs_legend_default = {
+                        "fontsize": 12,
+                        "bbox_to_anchor": (0.95, 0.95),
+                        "frameon": False,
+                    }
+                    kwargs = update_kwargs(
+                        kwargs_legend_default,
+                        kwargs_legend,
+                    )
+                    ax_i.legend()
                 kwargs_zlabel_default = {
                     "fontsize": 14,
                     "ylabel": f"$A$",
@@ -534,7 +536,8 @@ class NuclearPDFSet(PDFSet):
                 kwargs_xlabel,
             )
             ax_i.set_xlabel(**kwargs)
-            ax_i.set_xlim(np.log10(x[0])-np.log10(x[0])/100, np.log10(x[-1]))
-            ax_i.yaxis._axinfo["grid"]["linewidth"] = 0
+            #, np.log10(x[-1]))
+            ax_i.set_zlim(ax_i.get_zlim()[1]*0.02)
+            #ax_i.yaxis._axinfo["grid"]["linewidth"] = 0
             ax_i.set_proj_type(proj_type)
             ax_i.view_init(*view_init[i] if isinstance(view_init, list) else view_init)
