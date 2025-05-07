@@ -182,7 +182,7 @@ class NuclearPDFSet(PDFSet):
         A_lines: float | list[float] | None = None,
         colors: list[str] | str | cycle = [],
         offset: float = 0,
-        labels_Bjx: Literal["lines", "legend", "none"] = "legend",
+        labels_Bjx: Literal["annotate", "legend", "none"] = "legend",
         name: str = "",
         plot_ratio: bool = False,
         pdf_label: Literal["title", "annotate", "none"] | None = "annotate",
@@ -446,7 +446,7 @@ class NuclearPDFSet(PDFSet):
 
             ax_m.set_ylabel(**kwargs_y)
 
-            if labels_Bjx == "lines":
+            if labels_Bjx == "annotate":
                 if m == len(ax.flat) - 1:
 
                     kwargs_legend_default = {
@@ -464,7 +464,8 @@ class NuclearPDFSet(PDFSet):
                 for x_j in x: 
                     if not plot_ratio:
                         ax_m.annotate(f"x={x_j}",fontsize= 10,
-                        xy= (0, my_data[obs_m].query(f"x=={x_j} and A ==1 ")["central"].iloc[0]))  
+                        xy= (0, my_data[obs_m].query(f"x=={x_j} and A ==1 ")["central"].iloc[0]+max(my_data[obs_m].query(f"A ==1 ")["central"])*0.025))  
+
             if labels_Bjx == "legend":
                 if plot_legend:
                     kwargs_legend_default = {
