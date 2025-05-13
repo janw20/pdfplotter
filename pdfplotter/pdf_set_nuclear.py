@@ -234,8 +234,8 @@ class NuclearPDFSet(PDFSet):
             for i, A_i in enumerate(A):
 
                 pdf_set = self.get(A=A_i)
-                x_i = x if x is not None else pdf_set.x_values
-                Q_i = Q if Q is not None else pdf_set.Q_values
+                x_i = x if x is not None else pdf_set.x
+                Q_i = Q if Q is not None else pdf_set.Q
 
                 Q_i_label = None if isinstance(Q_i, np.ndarray) else cast(float, Q_i)
 
@@ -449,8 +449,8 @@ class NuclearPDFSet(PDFSet):
                     ax_old = None
 
                 pdf_set = self.get(A=A_i)
-                x_i = x if x is not None else pdf_set.x_values
-                Q_i = Q if Q is not None else pdf_set.Q_values
+                x_i = x if x is not None else pdf_set.x
+                Q_i = Q if Q is not None else pdf_set.Q
 
                 Q_i_label = None if isinstance(Q_i, np.ndarray) else cast(float, Q_i)
 
