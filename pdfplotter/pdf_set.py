@@ -1,13 +1,16 @@
 from __future__ import annotations
 
 import lhapdf
+from matplotlib import pyplot as plt
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
 import sympy as sp
-from typing_extensions import Literal, Sequence
+from matplotlib import pyplot as plt
+from typing_extensions import Any, Literal, Sequence
 
 from pdfplotter.flavors import flavors_nucleus, isospin_transform, pid_from_flavor
+from pdfplotter.util import update_kwargs
 
 idx = pd.IndexSlice
 
@@ -502,3 +505,142 @@ class PDFSet:
         return self.get_uncertainty(
             "+", observable, x, Q, Q2, ratio_to, convention
         ), self.get_uncertainty("-", observable, x, Q, Q2, ratio_to, convention)
+
+    def plot(
+        self,
+        ax: plt.Axes,
+        observable: sp.Basic,
+        x: float | Sequence[float] | npt.NDArray[np.floating] | None = None,
+        Q: float | Sequence[float] | npt.NDArray[np.floating] | None = None,
+        Q2: float | Sequence[float] | npt.NDArray[np.floating] | None = None,
+        ratio_to: PDFSet | None = None,
+        uncertainty_convention: Literal["sym", "asym"] = "sym",
+        variable: Literal["x", "Q2"] = "x",
+        central: bool = True,
+        uncertainty: bool = True,
+        uncertainty_edges: bool = True,
+        kwargs_central: dict[str, Any] = {},
+        kwargs_uncertainty: dict[str, Any] = {},
+        kwargs_uncertainty_edges: dict[str, Any] = {},
+    ) -> None:
+        """Plots an observable of this PDF set.
+
+        Parameters
+        ----------
+        ax : plt.Axes
+            The axes to plot on.
+        observable : sp.Basic
+            The observable to plot.
+        x : np.floating | npt.NDArray[np.floating] | None, optional
+            The x values to plot, by default None. If None, the values in `self.x` are used.
+        Q : np.floating | npt.NDArray[np.floating] | None, optional
+            The Q values to plot, by default None. If None and `Q2` is also None, the values in `self.Q` are used.
+        Q2 : np.floating | npt.NDArray[np.floating] | None, optional
+            The Q2 values to plot, by default None. If None and `Q` is also None, the values in `self.Q2` are used.
+        ratio_to : PDFSet | None, optional
+            For calculating ratios: the PDF set of which the `observable` in the denominator is taken of, by default None, i.e. no ratio.
+        uncertainty_convention : "sym" or "asym", optional
+            The convention for the uncertainty. "sym" for symmetric uncertainties, "asym" for asymmetric uncertainties. By default "sym".
+        variable : Literal[&quot;x&quot;, &quot;Q&quot;], optional
+            The variable on the x axis, by default "x"
+        central : bool, optional
+            Whether to plot the central value, by default True
+        uncertainty : bool, optional
+            Whether to plot the uncertainty band, by default True
+        uncertainty_edges : bool, optional
+            Whether to plot edges around the uncertainty band, by default True
+        kwargs_central : dict[str, Any], optional
+            Additional keyword arguments for the central PDF that should be passed to `plt.Axes.plot`, by default {}
+        kwargs_uncertainty : dict[str, Any], optional
+            Additional keyword arguments for the PDF uncertainty band that should be passed to `plt.Axes.fill_between`, by default {}
+        kwargs_uncertainty_edges : dict[str, Any], optional
+            Additional keyword arguments for the edges of the PDF uncertainty band that should be passed to `plt.Axes.plot`, by default {}
+        """
+        if variable == "x":
+            variable_values = x if x is not None else self.x
+        elif variable == "Q2":
+            variable_values = Q if Q is not None else self.Q
+        else:
+            raise ValueError("variable must be either 'x' or 'Q2'")
+
+        if central:
+            kwargs_default = {}
+            kwargs = update_kwargs(kwargs_default, kwargs_central)
+
+            l = ax.plot(
+                variable_values,
+                self.get_central(
+                    observable=observable, x=x, Q=Q, Q2=Q2, ratio_to=ratio_to
+                ),
+                **kwargs,
+            )[0]
+        else:
+            l = None
+
+        if uncertainty:
+            kwargs_from_central = (
+                {
+                    "facecolor": l.get_color(),
+                }
+                if l is not None
+                else {}
+            )
+            kwargs_default = {
+                "alpha": 0.3,
+                "lw": 0,
+            } | kwargs_from_central
+            kwargs = update_kwargs(kwargs_default, kwargs_uncertainty)
+
+            ax.fill_between(
+                variable_values,
+                *self.get_uncertainties(
+                    observable=observable,
+                    x=x,
+                    Q=Q,
+                    Q2=Q2,
+                    ratio_to=ratio_to,
+                    convention=uncertainty_convention,
+                ),  # pyright: ignore[reportArgumentType]
+                **kwargs,
+            )
+
+        if uncertainty_edges:
+            kwargs_from_central = (
+                {
+                    "color": l.get_color(),
+                    "ls": l.get_linestyle(),
+                }
+                if l is not None
+                else {}
+            )
+            kwargs_default = {
+                "lw": 0.5,
+            } | kwargs_from_central
+            kwargs = update_kwargs(kwargs_default, kwargs_uncertainty_edges)
+
+            ax.plot(
+                variable_values,
+                self.get_uncertainty(
+                    "+",
+                    observable=observable,
+                    x=x,
+                    Q=Q,
+                    Q2=Q2,
+                    ratio_to=ratio_to,
+                    convention=uncertainty_convention,
+                ),
+                **kwargs,
+            )
+            ax.plot(
+                variable_values,
+                self.get_uncertainty(
+                    "-",
+                    observable=observable,
+                    x=x,
+                    Q=Q,
+                    Q2=Q2,
+                    ratio_to=ratio_to,
+                    convention=uncertainty_convention,
+                ),
+                **kwargs,
+            )
