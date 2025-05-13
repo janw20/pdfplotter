@@ -5,7 +5,7 @@ import numpy as np
 import numpy.typing as npt
 import pandas as pd
 import sympy as sp
-from typing_extensions import Literal
+from typing_extensions import Literal, Sequence
 
 from pdfplotter.flavors import flavors_nucleus, isospin_transform, pid_from_flavor
 
@@ -17,6 +17,9 @@ class PDFSet:
 
     _name: str
     _pdf_set: lhapdf.PDFSet
+    _x: np.floating | npt.NDArray[np.floating]
+    _Q: np.floating | npt.NDArray[np.floating]
+    _Q2: np.floating | npt.NDArray[np.floating]
     _pdfs: list[lhapdf.PDF]
     _data: pd.DataFrame
     """DataFrame with index `(Q, member, x) ∈ Q_values × {0, ..., len(_pdfs)} × x_values` and columns `flavor ∈ {"d", "d̅", "d bound", ...}`"""
@@ -33,9 +36,9 @@ class PDFSet:
     def __init__(
         self,
         name: str,
-        x: npt.ArrayLike,
-        Q: npt.ArrayLike | None = None,
-        Q2: npt.ArrayLike | None = None,
+        x: float | Sequence[float] | npt.NDArray[np.floating],
+        Q: float | Sequence[float] | npt.NDArray[np.floating] | None = None,
+        Q2: float | Sequence[float] | npt.NDArray[np.floating] | None = None,
         A=1,
         Z=1,
         construct_full_nuclear_pdfs=False,
@@ -65,9 +68,15 @@ class PDFSet:
         if Q is None:
             if Q2 is None:
                 raise ValueError("Either Q or Q2 must be given")
-            Q = np.sqrt(Q2)
+            self._Q2 = np.array(Q2)[()]
+            self._Q = np.sqrt(Q2)
+        elif Q2 is None:
+            self._Q = np.array(Q)[()]
+            self._Q2 = self._Q**2
         elif Q is not None and Q2 is not None:
             raise ValueError("Only one of Q or Q2 must be given")
+
+        self._x = np.array(x)[()]
 
         if construct_full_nuclear_pdfs and A == 1:
             raise ValueError("A must be greater than 1 for full nuclear PDFs")
@@ -91,8 +100,8 @@ class PDFSet:
         )
         self._uncertainty_type = self.pdf_set.errorType
 
-        Q_values = np.atleast_1d(Q)
-        x_values = np.atleast_1d(x)
+        Q_values = np.atleast_1d(self._Q)
+        x_values = np.atleast_1d(self._x)
         self._data = pd.DataFrame(
             index=pd.MultiIndex.from_product(
                 [Q_values, np.arange(self._pdf_set.size), x_values],
@@ -157,19 +166,19 @@ class PDFSet:
         return self._uncertainty_type
 
     @property
-    def x_values(self) -> npt.NDArray[np.floating]:
+    def x(self) -> np.floating | npt.NDArray[np.floating]:
         """The momentum fraction values at which the PDFs are evaluated."""
-        return self._data.index.get_level_values("x").unique().to_numpy()
+        return self._x
 
     @property
-    def Q_values(self) -> npt.NDArray[np.floating]:
+    def Q(self) -> np.floating | npt.NDArray[np.floating]:
         """The scale values at which the PDFs are evaluated."""
-        return self._data.index.get_level_values("Q").unique().to_numpy()
+        return self._Q
 
     @property
-    def Q2_values(self) -> npt.NDArray[np.floating]:
+    def Q2(self) -> np.floating | npt.NDArray[np.floating]:
         """The squared scale values at which the PDFs are evaluated."""
-        return self.Q_values**2
+        return self._Q2
 
     def _check_and_load_flavors(self, term: sp.Basic) -> None:
         """Checks if the PDF flavors in `term` are already stored in `_data` and loads them if not. Bound proton PDFs are appended by \"bound\".
@@ -320,50 +329,45 @@ class PDFSet:
 
     def _flatten_x_Q(
         self,
-        x: npt.ArrayLike | None = None,
-        Q: npt.ArrayLike | None = None,
-        Q2: npt.ArrayLike | None = None,
-    ) -> tuple[npt.ArrayLike | slice, npt.ArrayLike | slice, tuple[int, ...]]:
-        x_flat: npt.NDArray[np.floating] | slice
-        Q_flat: npt.NDArray[np.floating] | slice
+        x: float | Sequence[float] | npt.NDArray[np.floating] | None = None,
+        Q: float | Sequence[float] | npt.NDArray[np.floating] | None = None,
+        Q2: float | Sequence[float] | npt.NDArray[np.floating] | None = None,
+    ) -> tuple[
+        np.floating | npt.NDArray[np.floating] | slice,
+        np.floating | npt.NDArray[np.floating] | slice,
+        tuple[()] | tuple[int, ...],
+    ]:
+        x_flat: np.floating | npt.NDArray[np.floating] | slice
+        Q_flat: np.floating | npt.NDArray[np.floating] | slice
 
         if x is None:
             x_flat = idx[:]
+            shape_x = self.x.shape
         else:
             x_flat = np.array(x)
+            shape_x = x_flat.shape
+            x_flat = x_flat.flatten()[()]
 
         if Q is None and Q2 is None:
             Q_flat = idx[:]
+            shape_Q = self.Q.shape
         elif Q is None and Q2 is not None:
-            Q_flat = np.array(np.sqrt(Q2))
+            Q_flat = np.sqrt(Q2)
+            shape_Q = Q_flat.shape
+            Q_flat = Q_flat.flatten()[()]
         elif Q is not None and Q2 is None:
             Q_flat = np.array(Q)
+            shape_Q = Q_flat.shape
+            Q_flat = Q_flat.flatten()[()]
         else:
             raise ValueError("Only one of Q and Q2 must be given")
 
-        # check if we set x or Q to idx[:]
-        if isinstance(x_flat, np.ndarray) and not isinstance(Q_flat, np.ndarray):
-            shape = self.Q_values.shape + x_flat.shape
-            x_flat = x_flat.flatten()
-        elif not isinstance(x_flat, np.ndarray) and isinstance(Q_flat, np.ndarray):
-            shape = self.x_values.shape + Q_flat.shape
-            Q_flat = Q_flat.flatten()
-        elif isinstance(x_flat, np.ndarray) and isinstance(Q_flat, np.ndarray):
-            x_flat, Q_flat = np.broadcast_arrays(x_flat, Q_flat)
-            shape = x_flat.shape
-            x_flat = x_flat.flatten()
-            Q_flat = Q_flat.flatten()
-        elif not isinstance(x_flat, np.ndarray) and not isinstance(
-            Q_flat, np.ndarray
-        ):  # FIXME
-            shape = np.broadcast_shapes(self.x_values.shape, self.Q_values.shape)
-
-        return x_flat, Q_flat, shape
+        return x_flat, Q_flat, shape_x + shape_Q
 
     def _reshape(
-        self, a: npt.NDArray[np.floating], shape: tuple[int, ...]
+        self, a: npt.NDArray[np.floating], shape: tuple[int, ...] | None = None
     ) -> npt.NDArray[np.floating] | np.floating:
-        return a.reshape(shape)[()]
+        return a.reshape(shape if shape is not None else a.shape)[()]
 
     def get_central(
         self,
@@ -408,9 +412,9 @@ class PDFSet:
         self,
         observable: sp.Basic,
         member: int,
-        x: npt.ArrayLike | None = None,
-        Q: npt.ArrayLike | None = None,
-        Q2: npt.ArrayLike | None = None,
+        x: float | Sequence[float] | npt.NDArray[np.floating] | None = None,
+        Q: float | Sequence[float] | npt.NDArray[np.floating] | None = None,
+        Q2: float | Sequence[float] | npt.NDArray[np.floating] | None = None,
     ) -> npt.NDArray[np.floating]:
         x_flat, Q_flat, shape = self._flatten_x_Q(x, Q, Q2)
 
@@ -421,9 +425,9 @@ class PDFSet:
         self,
         side: Literal["+", "-"],
         observable: sp.Basic,
-        x: npt.ArrayLike | None = None,
-        Q: npt.ArrayLike | None = None,
-        Q2: npt.ArrayLike | None = None,
+        x: float | Sequence[float] | npt.NDArray[np.floating] | None = None,
+        Q: float | Sequence[float] | npt.NDArray[np.floating] | None = None,
+        Q2: float | Sequence[float] | npt.NDArray[np.floating] | None = None,
         ratio_to: PDFSet | None = None,
         convention: Literal["sym", "asym"] = "sym",
     ) -> npt.NDArray[np.floating] | np.floating:
@@ -465,9 +469,9 @@ class PDFSet:
     def get_uncertainties(
         self,
         observable: sp.Basic,
-        x: npt.ArrayLike | None = None,
-        Q: npt.ArrayLike | None = None,
-        Q2: npt.ArrayLike | None = None,
+        x: float | Sequence[float] | npt.NDArray[np.floating] | None = None,
+        Q: float | Sequence[float] | npt.NDArray[np.floating] | None = None,
+        Q2: float | Sequence[float] | npt.NDArray[np.floating] | None = None,
         ratio_to: PDFSet | None = None,
         convention: Literal["sym", "asym"] = "sym",
     ) -> tuple[
