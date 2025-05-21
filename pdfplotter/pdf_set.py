@@ -69,8 +69,8 @@ class PDFSet:
         elif Q is not None and Q2 is not None:
             raise ValueError("Only one of Q or Q2 must be given")
 
-        if construct_full_nuclear_pdfs and A == 1:
-            raise ValueError("A must be greater than 1 for full nuclear PDFs")
+#        if construct_full_nuclear_pdfs and A == 1:
+#            raise ValueError("A must be greater than 1 for full nuclear PDFs")
         if Z > A:
             raise ValueError("Z must be less than or equal to A")
         self._name = name
