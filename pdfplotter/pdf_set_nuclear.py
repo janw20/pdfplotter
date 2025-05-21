@@ -602,6 +602,7 @@ class NuclearPDFSet(PDFSet):
 
             if pdf_label == "annotate":
                 kwargs_annotate_default = {
+                    "text":f"${util.to_str(obs_m, Q=Q,Q2=Q2)}$",
                     "fontsize": 12,
                     "xy": (0.97, 0.96),
                     "xycoords": "axes fraction",
@@ -615,12 +616,419 @@ class NuclearPDFSet(PDFSet):
                     ),
                 }
                 kwargs_n = update_kwargs(kwargs_annotate_default, kwargs_annotate, i=m)
-                ax_m.annotate(f"${util.to_str(obs_m, Q=Q,Q2=Q2)}$", **kwargs_n)
+                ax_m.annotate(**kwargs_n)
 
             if pdf_label == "ylabel":
                 kwargs_ylabel_default = {
                     "ylabel": f"${util.to_str(obs_m,Q=Q,Q2=Q2)}$",
                 }
+                if isinstance(kwargs_ylabel, list):
+                    kwargs_y = update_kwargs(kwargs_ylabel_default, kwargs_ylabel, i=m)
+                else:
+                    kwargs_y = update_kwargs(kwargs_ylabel_default, kwargs_ylabel)
+                ax_m.set_ylabel(**kwargs_y)
+
+        if title:
+
+            if isinstance(title, list):
+
+                for k, title_k in enumerate(title):
+                    kwargs_title_default = {
+                        "y": 1.05,
+                        "loc": "center",
+                        "label": f"{title_k}",
+                    }
+                    kwargs_title = update_kwargs(
+                        kwargs_title_default, kwargs_title, i=k
+                    )
+                    ax.flatten()[k].set_title(**kwargs_title)
+            else:
+                kwargs_title_default = {"y": 1.05, "loc": "center", "label": f"{title}"}
+                kwargs_title = update_kwargs(
+                    kwargs_title_default,
+                    kwargs_title,
+                )
+                ax.flatten()[0].set_title(**kwargs_title)
+
+
+    def plot_A_dep_vs_A_xslices(
+        self,
+        ax: plt.Axes | npt.NDArray[plt.Axes],  # pyright: ignore[reportInvalidTypeForm]
+        x: float | list[float],
+        observables: (
+            sp.Basic
+            | npt.NDArray[sp.Basic]  # pyright: ignore[reportInvalidTypeForm]
+            | list[sp.Basic]
+        ),
+        Q: float | None = None,
+        Q2: float | None = None,
+        A_lines: float | list[float] | None = None,
+        offset:float=1,
+        colors: list[str] | str | cycle = [],
+        unc_conv: Literal["sym", "asym"]="asym",
+        labels_Bjx: Literal["colorbar", "legend", "none"] = "legend",
+        logx: bool = True,
+        title: str | list[str] | None = None,
+        plot_unc: bool = False,
+        ratio_to: PDFSet | None =None,
+        pdf_label: Literal["ylabel", "annotate", "none"] | None = "annotate",
+        plot_legend: bool = True,
+        kwargs_theory: dict[str, Any] | list[dict[str, Any] | None] = {},
+        kwargs_legend: dict[str, Any] = {},
+        kwargs_xlabel: dict[str, Any] | list[dict[str, Any] | None] = {},
+        kwargs_ylabel: dict[str, Any] | list[dict[str, Any] | None] = {},
+        kwargs_title: dict[str, Any] = {},
+        kwargs_annotate: dict[str, Any] | list[dict[str, Any] | None] = {},
+        kwargs_uncertainty: dict[str, Any] | list[dict[str, Any] | None] = {},
+        kwargs_uncertainty_edges: dict[str, Any] | list[dict[str, Any] | None] = {},
+    ) -> None:
+        """Plot nuclear PDFs in the A-f plane for different values of x.
+
+        Parameters
+        ----------
+        ax : matplotlib.axes.Axes | numpy.ndarray[matplotlib.axes.Axes]
+            The axes to plot on.
+        x : float | list[float]
+            The x values to plot for.
+        observables : sympy.Basic | numpy.ndarray[sympy.Basic] | list[sympy.Basic]
+            The observables to plot.
+        Q : float, optional
+            The scale at which to plot the PDFs
+        Q2 : float, optional
+            The Q^2 scale at which to plot the PDFs. Either Q or Q2 has to be passed.
+        colors : list, optional
+            The colors to use for the different x values, by default [], tab color palette is used if == [].
+        logx : bool, optional
+            If True, use a logarithmic scale for the x axis, by default True.
+        title : str | list[str] | None, optional
+            The title of the plot, by default None. If a list is passed, the titles are set for each subplot. If a single string is passed, it is set for the first subplot.
+        plot_unc : bool, optional
+            If True, plot the uncertainties, by default False.
+        plot_ratio : bool, optional
+            If True, plot the ratio of the PDFs to the Proon PDF, by default False.
+        pdf_label : str, optional
+            The label for the PDF, by default "annotate". If "ylabel", the label is set as the y-axis label. If "annotate", the label is set as an anannotate in the top right corner of the plot.
+        kwargs_theory : dict[str, Any] | list[dict[str, Any] | None], optional
+            The keyword arguments to pass to the plot function for the central PDF, by default {}.
+        kwargs_legend : dict[str, Any], optional
+            The keyword arguments to pass to the legend function, by default {}.
+        kwargs_xlabel : dict[str, Any], optional
+            The keyword arguments to pass to the xlabel function, by default {}.
+        kwargs_ylabel : dict[str, Any] | list[dict[str, Any] | None], optional
+            The keyword arguments to pass to the ylabel function, by default {}.
+        kwargs_title : dict[str, Any], optional
+            The keyword arguments to pass to the title function, by default {}.
+        kwargs_annotate : dict[str, Any] | list[dict[str, Any] | None], optional
+            The keyword arguments to pass to the anannotate function, by default {}.
+        kwargs_uncertainty : dict[str, Any] | list[dict[str, Any] | None], optional
+            The keyword arguments to pass to the fill_between function for the uncertainties, by default {}.
+        kwargs_uncertainty_edges : dict[str, Any] | list[dict[str, Any] | None], optional
+            The keyword arguments to pass to the plot function for the uncertainty edges, by default {}.
+        """
+
+        my_sets = self.pdf_sets
+        my_data = {}
+
+        if not isinstance(x, list):
+            x = [x]
+
+        for x_i in x:
+            if x_i not in self.get(A=my_sets["A"][0]).x_values:
+                raise ValueError(
+                    f"Chosen x value {x_i} was not used for defining nuclear pdf set. \n Pleas choose x that was used in initialization"
+                )
+
+        if Q is None and Q2 is None:
+            raise ValueError("Please pass either `Q` or `Q2`")
+
+        elif Q is not None and Q2 is not None:
+            raise ValueError("Please pass either `Q` or `Q2`, not both")
+
+        elif Q is not None:
+            if Q not in self.get(A=my_sets["A"][0]).Q_values and Q not in np.sqrt(
+                np.array(self.get(A=my_sets["A"][0]).Q2_values)
+            ):
+                raise ValueError(
+                    f"Chosen Q value {Q} was not used for defining nuclear pdf set. \n Please choose Q that was used in initialization"
+                )
+        else:
+            if (
+                Q2 not in self.get(A=my_sets["A"][0]).Q2_values
+                and Q2 not in np.array(self.get(A=my_sets["A"][0]).Q_values) ** 2
+            ):
+                raise ValueError(
+                    f"Chosen Q2 value {Q2} was not used for defining nuclear pdf set. \n Please choose Q2 that was used in initialization"
+                )
+        if isinstance(observables, np.ndarray):
+            observables = list(observables.flatten())
+
+        if not isinstance(observables, list):
+            observables = [observables]
+
+        if isinstance(colors, str):
+            colors = len(x) * [colors]
+
+        elif isinstance(colors, list) and colors != []:
+            if len(colors) != len(x):
+                raise ValueError("No. of colors must match no. of x-values")
+        #if ratio_to==None and 1 in self.pdf_sets["A"]:
+        #    ratio_to=self.get(A=1)
+        for obs in observables:
+            data_obs = {}
+            list_x = []
+            list_central = []
+            list_unc1 = []
+            list_unc2 = []
+            list_A = []
+            for A in my_sets["A"]:
+                for x_i in self.get(A=A).x_values:
+                    list_x.append(x_i)
+                    list_central.append(
+                        self.get(A=A).get_central(x=x_i, Q=Q, Q2=Q2, observable=obs,ratio_to=ratio_to)
+                    )
+                    unc1 = self.get(A=A).get_uncertainties(
+                        x=x_i, Q=Q, Q2=Q2, observable=obs,ratio_to=ratio_to, convention=unc_conv
+                    )[0]
+                    unc2 = self.get(A=A).get_uncertainties(
+                        x=x_i, Q=Q, Q2=Q2, observable=obs,ratio_to=ratio_to, convention=unc_conv
+                    )[1]
+                    if math.isnan(unc1):
+                        list_unc1.append(
+                            self.get(A=A).get_central(x=x_i, Q=Q, Q2=Q2, observable=obs,ratio_to=ratio_to)
+                        )
+                    else:
+                        list_unc1.append(unc1)
+                    if math.isnan(unc2):
+                        list_unc2.append(
+                            self.get(A=A).get_central(x=x_i, Q=Q, Q2=Q2, observable=obs,ratio_to=ratio_to)
+                        )
+                    else:
+                        list_unc2.append(unc2)
+                i = 0
+                while i < len(self.get(A=A).x_values):
+                    list_A.append(A)
+                    i += 1
+
+            data_obs["A"] = list_A
+            data_obs["x"] = list_x
+            data_obs["central"] = list_central
+            data_obs["unc1"] = list_unc1
+            data_obs["unc2"] = list_unc2
+
+            dataframe_obs = pd.DataFrame(data_obs)
+            my_data[obs] = dataframe_obs
+
+        # fig, ax = plt.subplots(1, len(observables), figsize=(9 * len(observables), 5))
+
+        if not isinstance(ax, np.ndarray):
+            ax = np.array([ax])
+
+        for m, (obs_m, ax_m) in enumerate(zip(observables, ax.flat)):
+            ax_m: plt.Axes
+
+            if colors == []:
+                    colors = cycle(plt.rcParams["axes.prop_cycle"].by_key()["color"])
+
+            for j, (x_j, col) in enumerate(zip(x, colors)):
+                if isinstance(colors, str):
+                    col = colors
+                elif isinstance(colors, list):
+                    col = colors[j]
+                else:
+                    col = next(colors)
+                kwargs_default = {
+                    "color": col,
+                    "label": f"x={x_j}",
+                }
+                kwargs = update_kwargs(
+                    kwargs_default,
+                    kwargs_theory,
+                    i=j,
+                )
+                ax_m.plot(
+                    my_data[obs_m].query(f"x=={x_j}")["A"],
+                    np.array(my_data[obs_m].query(f"x=={x_j}")["central"])
+                    #/self.get(A=1).get_central(x=x_j, Q=Q, Q2=Q2, observable=obs_m)
+                    +offset*j,
+                    **kwargs,
+                )
+                ax_m.plot(
+                    [min(my_data[obs_m].query(f"x=={x_j}")["A"]),max(my_data[obs_m].query(f"x=={x_j}")["A"])],
+                    [j*offset+1, j*offset+1],
+                    linestyle="--",
+                    color="grey"
+                )
+                ax_m.plot(
+                    [min(my_data[obs_m].query(f"x=={x_j}")["A"]),max(my_data[obs_m].query(f"x=={x_j}")["A"])],
+                    [j*offset+1-0.3, j*offset+1-0.3],
+                    linestyle="--",
+                    color="grey",
+                    linewidth=0.7
+                )
+                ax_m.plot(
+                    [min(my_data[obs_m].query(f"x=={x_j}")["A"]),max(my_data[obs_m].query(f"x=={x_j}")["A"])],
+                    [j*offset+1+0.3, j*offset+1+0.3],
+                    linestyle="--",
+                    color="grey",
+                    linewidth=0.7
+                )
+                if plot_unc:
+                    kwargs_uncertainty_default = {
+                        "color": col,
+                        "alpha": 0.2,
+                    }
+                    kwargs_u = update_kwargs(
+                        kwargs_uncertainty_default,
+                        kwargs_uncertainty,
+                        i=j,
+                    )
+                    ax_m.fill_between(
+                        my_data[obs_m].query(f"x=={x_j}")["A"],
+                        my_data[obs_m].query(f"x=={x_j}")["unc1"]
+                        #/self.get(A=1).get_central(x=x_j, Q=Q, Q2=Q2, observable=obs_m)
+                        +offset*j,
+                        my_data[obs_m].query(f"x=={x_j}")["unc2"]
+                        #/self.get(A=1).get_central(x=x_j, Q=Q, Q2=Q2, observable=obs_m)
+                        +offset*j,
+                        **kwargs_u,
+                    )
+                    kwargs_uncertainty_edges_default = {
+                        "color": col,
+                        "linewidth": 0.5,
+                    }
+                    if isinstance(kwargs_uncertainty_edges, list):
+                        kwargs_u_e = update_kwargs(
+                            kwargs_uncertainty_edges_default,
+                            kwargs_uncertainty_edges,
+                            i=j,
+                        )
+                    else:
+                        kwargs_u_e = update_kwargs(
+                            kwargs_uncertainty_edges_default,
+                            kwargs_uncertainty_edges,
+                        )
+                    ax_m.plot(
+                        my_data[obs_m].query(f"x=={x_j}")["A"],
+                        my_data[obs_m].query(f"x=={x_j}")["unc1"]
+                        #/self.get(A=1).get_central(x=x_j, Q=Q, Q2=Q2, observable=obs_m)
+                        +offset*j,
+                        **kwargs_u_e,
+                    )
+                    ax_m.plot(
+                        my_data[obs_m].query(f"x=={x_j}")["A"],
+                        my_data[obs_m].query(f"x=={x_j}")["unc2"]
+                        #/self.get(A=1).get_central(x=x_j, Q=Q, Q2=Q2, observable=obs_m)
+                        +offset*j,
+                        **kwargs_u_e,
+                    )
+            if logx:
+                ax_m.set_xscale("log")
+
+            if A_lines is not None:
+                if not isinstance(A_lines, list):
+                    A_lines = [A_lines]
+
+                for A_line in A_lines:
+                    ax_m.axvline(
+                        x=A_line,
+                        color="black",
+                        linestyle="--",
+                        linewidth=0.8,
+                    )
+
+                ax_m.set_xticks(
+                    A_lines,
+                    labels=[
+                        f"{A_line} {elements.element_to_str(A=A_line,long=True)}"
+                        for A_line in A_lines
+                    ],
+                    ha="left",
+                    rotation=-30,
+                )
+                ax_m.xaxis.set_tick_params(which="minor", size=0)
+            else:
+                ax_m.xaxis.set_major_formatter(
+                    mticker.FuncFormatter(tick_formatter_exp_to_int)
+                )
+            kwargs_xlabel_default = {
+                "xlabel": "$A$",
+            }
+            if isinstance(kwargs_xlabel, list):
+                kwargs_x = update_kwargs(kwargs_xlabel_default, kwargs_xlabel, i=m)
+            else:
+                kwargs_x = update_kwargs(
+                    kwargs_xlabel_default,
+                    kwargs_xlabel,
+                )
+
+            ax_m.set_xlabel(**kwargs_x)
+            
+            if ratio_to !=None:
+                locs=[]
+                vals=[]
+                for j in range(len(x)):
+                    locs+=[j*offset+1-0.3,j*offset+1,j*offset+1+0.3]
+                    vals+=[0.7,1,1.3]
+                ax_m.set_yticks(locs,vals)
+
+            if labels_Bjx == "legend":
+                if m == len(ax.flat) - 1:
+                    if plot_legend:
+                        kwargs_legend_default = {
+                            "loc": "upper left",
+                            "bbox_to_anchor": (1, 1),
+                            "frameon": False,
+                        }
+                        kwargs_legend = update_kwargs(
+                            kwargs_legend_default,
+                            kwargs_legend,
+                        )
+
+                        ax_m.legend(**kwargs_legend)
+
+            if pdf_label == "annotate":
+                if ratio_to !=None:
+                    kwargs_annotate_default = {
+                        "text":f"${util.to_str(obs_m, Q=Q, Q2=Q2, R=True)}$",
+                        "fontsize": 12,
+                        "xy": (0.97, 0.96),
+                        "xycoords": "axes fraction",
+                        "va": "top",
+                        "ha": "right",
+                        "bbox": dict(
+                            facecolor=(1, 1, 1),
+                            edgecolor=(0.8, 0.8, 0.8),
+                            lw=0.9,
+                            boxstyle="round, pad=0.2",
+                        ),
+                    }
+                else:
+                    kwargs_annotate_default = {
+                        "text":f"${util.to_str(obs_m, Q=Q, Q2=Q2, R=False)}$",
+                        "fontsize": 12,
+                        "xy": (0.97, 0.96),
+                        "xycoords": "axes fraction",
+                        "va": "top",
+                        "ha": "right",
+                        "bbox": dict(
+                            facecolor=(1, 1, 1),
+                            edgecolor=(0.8, 0.8, 0.8),
+                            lw=0.9,
+                            boxstyle="round, pad=0.2",
+                        ),
+                    }                    
+                kwargs_n = update_kwargs(kwargs_annotate_default, kwargs_annotate, i=m)
+                ax_m.annotate(**kwargs_n)
+
+            if pdf_label == "ylabel":
+                if ratio_to !=None:
+                    kwargs_ylabel_default = {
+                        "ylabel": f"${util.to_str(obs_m,Q=Q,Q2=Q2, R=True)}$",
+                    }
+                else:
+                    kwargs_ylabel_default = {
+                        "ylabel": f"${util.to_str(obs_m,Q=Q,Q2=Q2, R=False)}$",
+                    }
                 if isinstance(kwargs_ylabel, list):
                     kwargs_y = update_kwargs(kwargs_ylabel_default, kwargs_ylabel, i=m)
                 else:
