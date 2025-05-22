@@ -825,7 +825,7 @@ class NuclearPDFSet(PDFSet):
 
         for m, (obs_m, ax_m) in enumerate(zip(observables, ax.flat)):
             ax_m: plt.Axes
-
+            ax_m.set_ylim(0,float(len(x))*offset+0.3)
             if colors == []:
                     colors = cycle(plt.rcParams["axes.prop_cycle"].by_key()["color"])
 
