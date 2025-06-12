@@ -514,7 +514,7 @@ class PDFSet:
         Q2: float | Sequence[float] | npt.NDArray[np.floating] | None = None,
         ratio_to: PDFSet | None = None,
         uncertainty_convention: Literal["sym", "asym"] = "sym",
-        variable: Literal["x", "Q2"] = "x",
+        variable: Literal["x", "Q", "Q2"] = "x",
         central: bool = True,
         uncertainty: bool = True,
         uncertainty_edges: bool = True,
@@ -540,7 +540,7 @@ class PDFSet:
             For calculating ratios: the PDF set of which the `observable` in the denominator is taken of, by default None, i.e. no ratio.
         uncertainty_convention : "sym" or "asym", optional
             The convention for the uncertainty. "sym" for symmetric uncertainties, "asym" for asymmetric uncertainties. By default "sym".
-        variable : Literal[&quot;x&quot;, &quot;Q&quot;], optional
+        variable : Literal["x", "Q", "Q2"], optional
             The variable on the x axis, by default "x"
         central : bool, optional
             Whether to plot the central value, by default True
@@ -557,10 +557,12 @@ class PDFSet:
         """
         if variable == "x":
             variable_values = x if x is not None else self.x
-        elif variable == "Q2":
+        elif variable == "Q":
             variable_values = Q if Q is not None else self.Q
+        elif variable == "Q2":
+            variable_values = Q2 if Q2 is not None else self.Q2
         else:
-            raise ValueError("variable must be either 'x' or 'Q2'")
+            raise ValueError("variable must be either 'x', 'Q' or 'Q2'")
 
         if central:
             kwargs_default = {}
