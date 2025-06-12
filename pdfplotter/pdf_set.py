@@ -34,6 +34,7 @@ class PDFSet:
     _construct_full_nuclear_pdfs: bool
     _confidence_level: float
     _uncertainty_type: str
+    _num_errors: int
 
     def __init__(
         self,
@@ -94,6 +95,7 @@ class PDFSet:
 
         self._pdf_set = lhapdf.getPDFSet(self.name)
         self._pdfs = self.pdf_set.mkPDFs()
+        self._num_errors = self.pdf_set.errorSize
         self._A = A
         self._Z = Z
         self._construct_full_nuclear_pdfs = construct_full_nuclear_pdfs
@@ -166,6 +168,11 @@ class PDFSet:
     def uncertainty_type(self) -> str:
         """The type of the uncertainties."""
         return self._uncertainty_type
+
+    @property
+    def num_errors(self) -> int:
+        """The number of error PDFs in the PDF set."""
+        return self._num_errors
 
     @property
     def x(self) -> np.floating | npt.NDArray[np.floating]:
