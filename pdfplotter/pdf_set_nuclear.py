@@ -257,7 +257,7 @@ class NuclearPDFSet(PDFSet):
             x = [x]
 
         for x_i in x:
-            if x_i not in self.get(A=my_sets["A"][0]).x_values:
+            if x_i not in self.get(A=my_sets["A"][0]).x:
                 raise ValueError(
                     f"Chosen x value {x_i} was not used for defining nuclear pdf set. \n Pleas choose x that was used in initialization"
                 )
@@ -269,16 +269,16 @@ class NuclearPDFSet(PDFSet):
             raise ValueError("Please pass either `Q` or `Q2`, not both")
 
         elif Q is not None:
-            if Q not in self.get(A=my_sets["A"][0]).Q_values and Q not in np.sqrt(
-                np.array(self.get(A=my_sets["A"][0]).Q2_values)
+            if Q not in self.get(A=my_sets["A"][0]).Q and Q not in np.sqrt(
+                np.array(self.get(A=my_sets["A"][0]).Q2)
             ):
                 raise ValueError(
                     f"Chosen Q value {Q} was not used for defining nuclear pdf set. \n Please choose Q that was used in initialization"
                 )
         else:
             if (
-                Q2 not in self.get(A=my_sets["A"][0]).Q2_values
-                and Q2 not in np.array(self.get(A=my_sets["A"][0]).Q_values) ** 2
+                Q2 not in self.get(A=my_sets["A"][0]).Q2
+                and Q2 not in np.array(self.get(A=my_sets["A"][0]).Q) ** 2
             ):
                 raise ValueError(
                     f"Chosen Q2 value {Q2} was not used for defining nuclear pdf set. \n Please choose Q2 that was used in initialization"
@@ -304,7 +304,7 @@ class NuclearPDFSet(PDFSet):
             list_unc2 = []
             list_A = []
             for A in my_sets["A"]:
-                for x_i in self.get(A=A).x_values:
+                for x_i in self.get(A=A).x:
                     list_x.append(x_i)
                     list_central.append(
                         self.get(A=A).get_central(x=x_i, Q=Q, Q2=Q2, observable=obs)
@@ -328,7 +328,7 @@ class NuclearPDFSet(PDFSet):
                     else:
                         list_unc2.append(unc2)
                 i = 0
-                while i < len(self.get(A=A).x_values):
+                while i < len(self.get(A=A).x):
                     list_A.append(A)
                     i += 1
 
@@ -602,7 +602,7 @@ class NuclearPDFSet(PDFSet):
 
             if pdf_label == "annotate":
                 kwargs_annotate_default = {
-                    "text":f"${util.to_str(obs_m, Q=Q,Q2=Q2)}$",
+                    "text": f"${util.to_str(obs_m, Q=Q,Q2=Q2)}$",
                     "fontsize": 12,
                     "xy": (0.97, 0.96),
                     "xycoords": "axes fraction",
@@ -650,7 +650,6 @@ class NuclearPDFSet(PDFSet):
                 )
                 ax.flatten()[0].set_title(**kwargs_title)
 
-
     def plot_A_dep_vs_A_xslices(
         self,
         ax: plt.Axes | npt.NDArray[plt.Axes],  # pyright: ignore[reportInvalidTypeForm]
@@ -663,14 +662,14 @@ class NuclearPDFSet(PDFSet):
         Q: float | None = None,
         Q2: float | None = None,
         A_lines: float | list[float] | None = None,
-        offset:float=1,
+        offset: float = 1,
         colors: list[str] | str | cycle = [],
-        unc_conv: Literal["sym", "asym"]="asym",
+        unc_conv: Literal["sym", "asym"] = "asym",
         labels_Bjx: Literal["colorbar", "legend", "none"] = "legend",
         logx: bool = True,
         title: str | list[str] | None = None,
         plot_unc: bool = False,
-        ratio_to: PDFSet | None =None,
+        ratio_to: PDFSet | None = None,
         pdf_label: Literal["ylabel", "annotate", "none"] | None = "annotate",
         plot_legend: bool = True,
         kwargs_theory: dict[str, Any] | list[dict[str, Any] | None] = {},
@@ -733,7 +732,7 @@ class NuclearPDFSet(PDFSet):
             x = [x]
 
         for x_i in x:
-            if x_i not in self.get(A=my_sets["A"][0]).x_values:
+            if x_i not in self.get(A=my_sets["A"][0]).x:
                 raise ValueError(
                     f"Chosen x value {x_i} was not used for defining nuclear pdf set. \n Pleas choose x that was used in initialization"
                 )
@@ -745,16 +744,16 @@ class NuclearPDFSet(PDFSet):
             raise ValueError("Please pass either `Q` or `Q2`, not both")
 
         elif Q is not None:
-            if Q not in self.get(A=my_sets["A"][0]).Q_values and Q not in np.sqrt(
-                np.array(self.get(A=my_sets["A"][0]).Q2_values)
+            if Q not in self.get(A=my_sets["A"][0]).Q and Q not in np.sqrt(
+                np.array(self.get(A=my_sets["A"][0]).Q2)
             ):
                 raise ValueError(
                     f"Chosen Q value {Q} was not used for defining nuclear pdf set. \n Please choose Q that was used in initialization"
                 )
         else:
             if (
-                Q2 not in self.get(A=my_sets["A"][0]).Q2_values
-                and Q2 not in np.array(self.get(A=my_sets["A"][0]).Q_values) ** 2
+                Q2 not in self.get(A=my_sets["A"][0]).Q2
+                and Q2 not in np.array(self.get(A=my_sets["A"][0]).Q) ** 2
             ):
                 raise ValueError(
                     f"Chosen Q2 value {Q2} was not used for defining nuclear pdf set. \n Please choose Q2 that was used in initialization"
@@ -771,7 +770,7 @@ class NuclearPDFSet(PDFSet):
         elif isinstance(colors, list) and colors != []:
             if len(colors) != len(x):
                 raise ValueError("No. of colors must match no. of x-values")
-        #if ratio_to==None and 1 in self.pdf_sets["A"]:
+        # if ratio_to==None and 1 in self.pdf_sets["A"]:
         #    ratio_to=self.get(A=1)
         for obs in observables:
             data_obs = {}
@@ -781,31 +780,47 @@ class NuclearPDFSet(PDFSet):
             list_unc2 = []
             list_A = []
             for A in my_sets["A"]:
-                for x_i in self.get(A=A).x_values:
+                for x_i in self.get(A=A).x:
                     list_x.append(x_i)
                     list_central.append(
-                        self.get(A=A).get_central(x=x_i, Q=Q, Q2=Q2, observable=obs,ratio_to=ratio_to)
+                        self.get(A=A).get_central(
+                            x=x_i, Q=Q, Q2=Q2, observable=obs, ratio_to=ratio_to
+                        )
                     )
                     unc1 = self.get(A=A).get_uncertainties(
-                        x=x_i, Q=Q, Q2=Q2, observable=obs,ratio_to=ratio_to, convention=unc_conv
+                        x=x_i,
+                        Q=Q,
+                        Q2=Q2,
+                        observable=obs,
+                        ratio_to=ratio_to,
+                        convention=unc_conv,
                     )[0]
                     unc2 = self.get(A=A).get_uncertainties(
-                        x=x_i, Q=Q, Q2=Q2, observable=obs,ratio_to=ratio_to, convention=unc_conv
+                        x=x_i,
+                        Q=Q,
+                        Q2=Q2,
+                        observable=obs,
+                        ratio_to=ratio_to,
+                        convention=unc_conv,
                     )[1]
                     if math.isnan(unc1):
                         list_unc1.append(
-                            self.get(A=A).get_central(x=x_i, Q=Q, Q2=Q2, observable=obs,ratio_to=ratio_to)
+                            self.get(A=A).get_central(
+                                x=x_i, Q=Q, Q2=Q2, observable=obs, ratio_to=ratio_to
+                            )
                         )
                     else:
                         list_unc1.append(unc1)
                     if math.isnan(unc2):
                         list_unc2.append(
-                            self.get(A=A).get_central(x=x_i, Q=Q, Q2=Q2, observable=obs,ratio_to=ratio_to)
+                            self.get(A=A).get_central(
+                                x=x_i, Q=Q, Q2=Q2, observable=obs, ratio_to=ratio_to
+                            )
                         )
                     else:
                         list_unc2.append(unc2)
                 i = 0
-                while i < len(self.get(A=A).x_values):
+                while i < len(self.get(A=A).x):
                     list_A.append(A)
                     i += 1
 
@@ -825,9 +840,9 @@ class NuclearPDFSet(PDFSet):
 
         for m, (obs_m, ax_m) in enumerate(zip(observables, ax.flat)):
             ax_m: plt.Axes
-            ax_m.set_ylim(0,float(len(x))*offset+0.3)
+            ax_m.set_ylim(0, float(len(x)) * offset + 0.3)
             if colors == []:
-                    colors = cycle(plt.rcParams["axes.prop_cycle"].by_key()["color"])
+                colors = cycle(plt.rcParams["axes.prop_cycle"].by_key()["color"])
 
             for j, (x_j, col) in enumerate(zip(x, colors)):
                 if isinstance(colors, str):
@@ -848,29 +863,38 @@ class NuclearPDFSet(PDFSet):
                 ax_m.plot(
                     my_data[obs_m].query(f"x=={x_j}")["A"],
                     np.array(my_data[obs_m].query(f"x=={x_j}")["central"])
-                    #/self.get(A=1).get_central(x=x_j, Q=Q, Q2=Q2, observable=obs_m)
-                    +offset*j,
+                    # /self.get(A=1).get_central(x=x_j, Q=Q, Q2=Q2, observable=obs_m)
+                    + offset * j,
                     **kwargs,
                 )
                 ax_m.plot(
-                    [min(my_data[obs_m].query(f"x=={x_j}")["A"]),max(my_data[obs_m].query(f"x=={x_j}")["A"])],
-                    [j*offset+1, j*offset+1],
-                    linestyle="--",
-                    color="grey"
-                )
-                ax_m.plot(
-                    [min(my_data[obs_m].query(f"x=={x_j}")["A"]),max(my_data[obs_m].query(f"x=={x_j}")["A"])],
-                    [j*offset+1-0.3, j*offset+1-0.3],
+                    [
+                        min(my_data[obs_m].query(f"x=={x_j}")["A"]),
+                        max(my_data[obs_m].query(f"x=={x_j}")["A"]),
+                    ],
+                    [j * offset + 1, j * offset + 1],
                     linestyle="--",
                     color="grey",
-                    linewidth=0.7
                 )
                 ax_m.plot(
-                    [min(my_data[obs_m].query(f"x=={x_j}")["A"]),max(my_data[obs_m].query(f"x=={x_j}")["A"])],
-                    [j*offset+1+0.3, j*offset+1+0.3],
+                    [
+                        min(my_data[obs_m].query(f"x=={x_j}")["A"]),
+                        max(my_data[obs_m].query(f"x=={x_j}")["A"]),
+                    ],
+                    [j * offset + 1 - 0.3, j * offset + 1 - 0.3],
                     linestyle="--",
                     color="grey",
-                    linewidth=0.7
+                    linewidth=0.7,
+                )
+                ax_m.plot(
+                    [
+                        min(my_data[obs_m].query(f"x=={x_j}")["A"]),
+                        max(my_data[obs_m].query(f"x=={x_j}")["A"]),
+                    ],
+                    [j * offset + 1 + 0.3, j * offset + 1 + 0.3],
+                    linestyle="--",
+                    color="grey",
+                    linewidth=0.7,
                 )
                 if plot_unc:
                     kwargs_uncertainty_default = {
@@ -885,11 +909,11 @@ class NuclearPDFSet(PDFSet):
                     ax_m.fill_between(
                         my_data[obs_m].query(f"x=={x_j}")["A"],
                         my_data[obs_m].query(f"x=={x_j}")["unc1"]
-                        #/self.get(A=1).get_central(x=x_j, Q=Q, Q2=Q2, observable=obs_m)
-                        +offset*j,
+                        # /self.get(A=1).get_central(x=x_j, Q=Q, Q2=Q2, observable=obs_m)
+                        + offset * j,
                         my_data[obs_m].query(f"x=={x_j}")["unc2"]
-                        #/self.get(A=1).get_central(x=x_j, Q=Q, Q2=Q2, observable=obs_m)
-                        +offset*j,
+                        # /self.get(A=1).get_central(x=x_j, Q=Q, Q2=Q2, observable=obs_m)
+                        + offset * j,
                         **kwargs_u,
                     )
                     kwargs_uncertainty_edges_default = {
@@ -910,15 +934,15 @@ class NuclearPDFSet(PDFSet):
                     ax_m.plot(
                         my_data[obs_m].query(f"x=={x_j}")["A"],
                         my_data[obs_m].query(f"x=={x_j}")["unc1"]
-                        #/self.get(A=1).get_central(x=x_j, Q=Q, Q2=Q2, observable=obs_m)
-                        +offset*j,
+                        # /self.get(A=1).get_central(x=x_j, Q=Q, Q2=Q2, observable=obs_m)
+                        + offset * j,
                         **kwargs_u_e,
                     )
                     ax_m.plot(
                         my_data[obs_m].query(f"x=={x_j}")["A"],
                         my_data[obs_m].query(f"x=={x_j}")["unc2"]
-                        #/self.get(A=1).get_central(x=x_j, Q=Q, Q2=Q2, observable=obs_m)
-                        +offset*j,
+                        # /self.get(A=1).get_central(x=x_j, Q=Q, Q2=Q2, observable=obs_m)
+                        + offset * j,
                         **kwargs_u_e,
                     )
             if logx:
@@ -962,14 +986,14 @@ class NuclearPDFSet(PDFSet):
                 )
 
             ax_m.set_xlabel(**kwargs_x)
-            
-            if ratio_to !=None:
-                locs=[]
-                vals=[]
+
+            if ratio_to != None:
+                locs = []
+                vals = []
                 for j in range(len(x)):
-                    locs+=[j*offset+1-0.3,j*offset+1,j*offset+1+0.3]
-                    vals+=[0.7,1,1.3]
-                ax_m.set_yticks(locs,vals)
+                    locs += [j * offset + 1 - 0.3, j * offset + 1, j * offset + 1 + 0.3]
+                    vals += [0.7, 1, 1.3]
+                ax_m.set_yticks(locs, vals)
 
             if labels_Bjx == "legend":
                 if m == len(ax.flat) - 1:
@@ -987,9 +1011,9 @@ class NuclearPDFSet(PDFSet):
                         ax_m.legend(**kwargs_legend)
 
             if pdf_label == "annotate":
-                if ratio_to !=None:
+                if ratio_to != None:
                     kwargs_annotate_default = {
-                        "text":f"${util.to_str(obs_m, Q=Q, Q2=Q2, R=True)}$",
+                        "text": f"${util.to_str(obs_m, Q=Q, Q2=Q2, R=True)}$",
                         "fontsize": 12,
                         "xy": (0.97, 0.96),
                         "xycoords": "axes fraction",
@@ -1004,7 +1028,7 @@ class NuclearPDFSet(PDFSet):
                     }
                 else:
                     kwargs_annotate_default = {
-                        "text":f"${util.to_str(obs_m, Q=Q, Q2=Q2, R=False)}$",
+                        "text": f"${util.to_str(obs_m, Q=Q, Q2=Q2, R=False)}$",
                         "fontsize": 12,
                         "xy": (0.97, 0.96),
                         "xycoords": "axes fraction",
@@ -1016,12 +1040,12 @@ class NuclearPDFSet(PDFSet):
                             lw=0.9,
                             boxstyle="round, pad=0.2",
                         ),
-                    }                    
+                    }
                 kwargs_n = update_kwargs(kwargs_annotate_default, kwargs_annotate, i=m)
                 ax_m.annotate(**kwargs_n)
 
             if pdf_label == "ylabel":
-                if ratio_to !=None:
+                if ratio_to != None:
                     kwargs_ylabel_default = {
                         "ylabel": f"${util.to_str(obs_m,Q=Q,Q2=Q2, R=True)}$",
                     }
