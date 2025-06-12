@@ -34,6 +34,7 @@ class PDFSet:
     _construct_full_nuclear_pdfs: bool
     _confidence_level: float
     _uncertainty_type: str
+    _num_errors: int
 
     def __init__(
         self,
@@ -80,8 +81,6 @@ class PDFSet:
 
         self._x = np.array(x)[()]
 
-        if construct_full_nuclear_pdfs and A == 1:
-            raise ValueError("A must be greater than 1 for full nuclear PDFs")
         if Z > A:
             raise ValueError("Z must be less than or equal to A")
         self._name = name
@@ -94,6 +93,7 @@ class PDFSet:
 
         self._pdf_set = lhapdf.getPDFSet(self.name)
         self._pdfs = self.pdf_set.mkPDFs()
+        self._num_errors = self.pdf_set.errorSize
         self._A = A
         self._Z = Z
         self._construct_full_nuclear_pdfs = construct_full_nuclear_pdfs
@@ -166,6 +166,11 @@ class PDFSet:
     def uncertainty_type(self) -> str:
         """The type of the uncertainties."""
         return self._uncertainty_type
+
+    @property
+    def num_errors(self) -> int:
+        """The number of error PDFs in the PDF set."""
+        return self._num_errors
 
     @property
     def x(self) -> np.floating | npt.NDArray[np.floating]:
@@ -514,7 +519,7 @@ class PDFSet:
         Q2: float | Sequence[float] | npt.NDArray[np.floating] | None = None,
         ratio_to: PDFSet | None = None,
         uncertainty_convention: Literal["sym", "asym"] = "sym",
-        variable: Literal["x", "Q2"] = "x",
+        variable: Literal["x", "Q", "Q2"] = "x",
         central: bool = True,
         uncertainty: bool = True,
         uncertainty_edges: bool = True,
@@ -540,7 +545,7 @@ class PDFSet:
             For calculating ratios: the PDF set of which the `observable` in the denominator is taken of, by default None, i.e. no ratio.
         uncertainty_convention : "sym" or "asym", optional
             The convention for the uncertainty. "sym" for symmetric uncertainties, "asym" for asymmetric uncertainties. By default "sym".
-        variable : Literal[&quot;x&quot;, &quot;Q&quot;], optional
+        variable : Literal["x", "Q", "Q2"], optional
             The variable on the x axis, by default "x"
         central : bool, optional
             Whether to plot the central value, by default True
@@ -557,10 +562,12 @@ class PDFSet:
         """
         if variable == "x":
             variable_values = x if x is not None else self.x
-        elif variable == "Q2":
+        elif variable == "Q":
             variable_values = Q if Q is not None else self.Q
+        elif variable == "Q2":
+            variable_values = Q2 if Q2 is not None else self.Q2
         else:
-            raise ValueError("variable must be either 'x' or 'Q2'")
+            raise ValueError("variable must be either 'x', 'Q' or 'Q2'")
 
         if central:
             kwargs_default = {}
