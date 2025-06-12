@@ -286,11 +286,24 @@ class NuclearPDFSet(PDFSet):
 
             for j, (A_j, col_j) in enumerate(zip(A, colors)):
                 z_upper = self.get(A=A_j).get_uncertainties(
-                    observable=obs_i, x=x, Q=Q, Q2=Q2, ratio_to=ratio_to, convention=uncertainty_convention,
+                    observable=obs_i,
+                    x=x,
+                    Q=Q,
+                    Q2=Q2,
+                    ratio_to=ratio_to,
+                    convention=uncertainty_convention,
                 )[0]
-                z_lower = [k if k>0 else 0 for k in self.get(A=A_j).get_uncertainties(
-                        observable=obs_i, x=x, Q=Q, Q2=Q2, ratio_to=ratio_to, convention=uncertainty_convention,
-                        )[1]]
+                z_lower = [
+                    k if k > 0 else 0
+                    for k in self.get(A=A_j).get_uncertainties(
+                        observable=obs_i,
+                        x=x,
+                        Q=Q,
+                        Q2=Q2,
+                        ratio_to=ratio_to,
+                        convention=uncertainty_convention,
+                    )[1]
+                ]
 
                 kwargs_default = {
                     "color": col_j,
@@ -315,7 +328,12 @@ class NuclearPDFSet(PDFSet):
                 ax_i.plot(
                     np.log10(x),
                     Aj_arr,
-                    [k if k>0 else 0 for k in self.get(A=A_j).get_central(x=x, Q=Q, Q2=Q2, observable=obs_i,ratio_to=ratio_to)],
+                    [
+                        k if k > 0 else 0
+                        for k in self.get(A=A_j).get_central(
+                            x=x, Q=Q, Q2=Q2, observable=obs_i, ratio_to=ratio_to
+                        )
+                    ],
                     **kwargs,
                 )
 
@@ -435,17 +453,21 @@ class NuclearPDFSet(PDFSet):
                             centrals[x_line],
                             **kwargs,
                         )
-                        ax_i.plot(                            
-                            [np.log10(x_line),np.log10(x_line)],
-                            [np.log10(A[0]),np.log10(A[0])],
-                            [0,self.get(A=A[0]).get_central(
+                        ax_i.plot(
+                            [np.log10(x_line), np.log10(x_line)],
+                            [np.log10(A[0]), np.log10(A[0])],
+                            [
+                                0,
+                                self.get(A=A[0]).get_central(
                                     x=x_line,
                                     Q=Q,
                                     Q2=Q2,
                                     observable=obs_i,
                                     ratio_to=ratio_to,
-                                )],
-                            **kwargs,)
+                                ),
+                            ],
+                            **kwargs,
+                        )
                     elif A_scale == "lin":
                         ax_i.plot(
                             np.ones(len(A)) * np.log10(x_line),
@@ -453,17 +475,21 @@ class NuclearPDFSet(PDFSet):
                             centrals[x_line],
                             **kwargs,
                         )
-                        ax_i.plot(                            
-                            [np.log10(x_line),np.log10(x_line)],
-                            [A[0],A[0]],
-                            [0,self.get(A=A[0]).get_central(
+                        ax_i.plot(
+                            [np.log10(x_line), np.log10(x_line)],
+                            [A[0], A[0]],
+                            [
+                                0,
+                                self.get(A=A[0]).get_central(
                                     x=x_line,
                                     Q=Q,
                                     Q2=Q2,
                                     observable=obs_i,
                                     ratio_to=ratio_to,
-                                )],
-                            **kwargs,)
+                                ),
+                            ],
+                            **kwargs,
+                        )
             if pdf_label == "annotate":
                 kwargs_annotation_default = {
                     "fontsize": 12,
@@ -599,7 +625,15 @@ class NuclearPDFSet(PDFSet):
             if not ratio_to:
                 ax_i.set_zlim(ax_i.get_zlim()[1] * 0.02)
             else:
-                ax_i.set_zlim(ax_i.get_zlim()[0], 2*np.median(self.get(A=A_j).get_central(x=x, Q=Q, Q2=Q2, observable=obs_i,ratio_to=ratio_to)))
+                ax_i.set_zlim(
+                    ax_i.get_zlim()[0],
+                    2
+                    * np.median(
+                        self.get(A=A_j).get_central(
+                            x=x, Q=Q, Q2=Q2, observable=obs_i, ratio_to=ratio_to
+                        )
+                    ),
+                )
                 ax_i.set_zlim(ax_i.get_zlim()[1] * 0.02)
             # ax_i.yaxis._axinfo["grid"]["linewidth"] = 0
             ax_i.set_proj_type(proj_type)
