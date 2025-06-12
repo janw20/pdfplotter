@@ -283,7 +283,7 @@ class NuclearPDFSet(PDFSet):
             colors = [cmap(i) for i in range(len(A))]
 
         for i, (obs_i, ax_i) in enumerate(zip(observables, ax.flat)):
-
+            zlim_bottom = np.inf
             for j, (A_j, col_j) in enumerate(zip(A, colors)):
                 z_upper = self.get(A=A_j).get_uncertainties(
                     observable=obs_i,
@@ -335,6 +335,14 @@ class NuclearPDFSet(PDFSet):
                         )
                     ],
                     **kwargs,
+                )
+                zlim_bottom = min(
+                    list(
+                        self.get(A=A_j).get_central(
+                            x=x, Q=Q, Q2=Q2, observable=obs_i, ratio_to=ratio_to
+                        )
+                    )
+                    + [zlim_bottom]
                 )
 
                 if plot_uncertainty:
@@ -623,7 +631,7 @@ class NuclearPDFSet(PDFSet):
             ax_i.set_xlabel(**kwargs)
             # , np.log10(x[-1]))
             if not ratio_to:
-                ax_i.set_zlim(ax_i.get_zlim()[1] * 0.02)
+                ax_i.set_zlim(zlim_bottom)
             else:
                 ax_i.set_zlim(
                     ax_i.get_zlim()[0],
@@ -634,7 +642,7 @@ class NuclearPDFSet(PDFSet):
                         )
                     ),
                 )
-                ax_i.set_zlim(ax_i.get_zlim()[1] * 0.02)
+                ax_i.set_zlim(zlim_bottom)
             # ax_i.yaxis._axinfo["grid"]["linewidth"] = 0
             ax_i.set_proj_type(proj_type)
             ax_i.view_init(*view_init[i] if isinstance(view_init, list) else view_init)
