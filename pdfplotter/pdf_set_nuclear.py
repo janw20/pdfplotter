@@ -179,6 +179,7 @@ class NuclearPDFSet(PDFSet):
         colors: list = [],
         A_scale: Literal["log", "linlog", "lin"] = "log",
         plot_uncertainty: bool = True,
+        uncertainty_convention: Literal["sym", "asym"] = "asym",
         ratio_to: PDFSet | None = None,
         pdf_label: Literal["ylabel", "annotate"] = "annotate",
         A_label: Literal["legend", "ticks", "both"] = "ticks",
@@ -285,10 +286,10 @@ class NuclearPDFSet(PDFSet):
 
             for j, (A_j, col_j) in enumerate(zip(A, colors)):
                 z_upper = self.get(A=A_j).get_uncertainties(
-                    observable=obs_i, x=x, Q=Q, Q2=Q2, ratio_to=ratio_to
+                    observable=obs_i, x=x, Q=Q, Q2=Q2, ratio_to=ratio_to, convention=uncertainty_convention,
                 )[0]
                 z_lower = [k if k>0 else 0 for k in self.get(A=A_j).get_uncertainties(
-                        observable=obs_i, x=x, Q=Q, Q2=Q2, ratio_to=ratio_to
+                        observable=obs_i, x=x, Q=Q, Q2=Q2, ratio_to=ratio_to, convention=uncertainty_convention,
                         )[1]]
 
                 kwargs_default = {
