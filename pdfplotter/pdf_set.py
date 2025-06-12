@@ -81,8 +81,6 @@ class PDFSet:
 
         self._x = np.array(x)[()]
 
-        if construct_full_nuclear_pdfs and A == 1:
-            raise ValueError("A must be greater than 1 for full nuclear PDFs")
         if Z > A:
             raise ValueError("Z must be less than or equal to A")
         self._name = name
