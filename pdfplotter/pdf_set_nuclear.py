@@ -242,7 +242,7 @@ class NuclearPDFSet(PDFSet):
         """
 
         my_sets = self.pdf_sets
-        x = self.get(A=my_sets["A"][0]).x_values
+        x = self.get(A=my_sets["A"][0]).x
 
         if Q is None and Q2 is None:
             raise ValueError("Please pass either `Q` or `Q2`")
@@ -251,16 +251,16 @@ class NuclearPDFSet(PDFSet):
             raise ValueError("Please pass either `Q` or `Q2`, not both")
 
         elif Q is not None:
-            if Q not in self.get(A=my_sets["A"][0]).Q_values and Q not in np.sqrt(
-                np.array(self.get(A=my_sets["A"][0]).Q2_values)
+            if Q not in self.get(A=my_sets["A"][0]).Q and Q not in np.sqrt(
+                np.array(self.get(A=my_sets["A"][0]).Q2)
             ):
                 raise ValueError(
                     f"Chosen Q value {Q} was not used for defining nuclear pdf set. \n Please choose Q that was used in initialization"
                 )
         else:
             if (
-                Q2 not in self.get(A=my_sets["A"][0]).Q2_values
-                and Q2 not in np.array(self.get(A=my_sets["A"][0]).Q_values) ** 2
+                Q2 not in self.get(A=my_sets["A"][0]).Q2
+                and Q2 not in np.array(self.get(A=my_sets["A"][0]).Q) ** 2
             ):
                 raise ValueError(
                     f"Chosen Q2 value {Q2} was not used for defining nuclear pdf set. \n Please choose Q2 that was used in initialization"
