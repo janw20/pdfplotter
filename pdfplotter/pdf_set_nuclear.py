@@ -863,7 +863,6 @@ class NuclearPDFSet(PDFSet):
                 ax_m.plot(
                     my_data[obs_m].query(f"x=={x_j}")["A"],
                     np.array(my_data[obs_m].query(f"x=={x_j}")["central"])
-                    # /self.get(A=1).get_central(x=x_j, Q=Q, Q2=Q2, observable=obs_m)
                     + offset * j,
                     **kwargs,
                 )
@@ -908,11 +907,9 @@ class NuclearPDFSet(PDFSet):
                     )
                     ax_m.fill_between(
                         my_data[obs_m].query(f"x=={x_j}")["A"],
-                        my_data[obs_m].query(f"x=={x_j}")["unc1"]
-                        # /self.get(A=1).get_central(x=x_j, Q=Q, Q2=Q2, observable=obs_m)
+                        np.array(my_data[obs_m].query(f"x=={x_j}")["unc1"], dtype=float)
                         + offset * j,
-                        my_data[obs_m].query(f"x=={x_j}")["unc2"]
-                        # /self.get(A=1).get_central(x=x_j, Q=Q, Q2=Q2, observable=obs_m)
+                        np.array(my_data[obs_m].query(f"x=={x_j}")["unc2"], dtype=float)
                         + offset * j,
                         **kwargs_u,
                     )
