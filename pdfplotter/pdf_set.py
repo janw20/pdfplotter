@@ -93,7 +93,7 @@ class PDFSet:
 
         self._pdf_set = lhapdf.getPDFSet(self.name)
         self._pdfs = self.pdf_set.mkPDFs()
-        self._num_errors = self.pdf_set.errorSize
+        self._num_errors = self.pdf_set.errSize
         self._A = A
         self._Z = Z
         self._construct_full_nuclear_pdfs = construct_full_nuclear_pdfs
