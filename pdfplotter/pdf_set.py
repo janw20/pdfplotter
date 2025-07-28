@@ -549,7 +549,7 @@ class PDFSet:
         if observable is None:
 
             def integrand(x: np.floating, Q: np.floating) -> float:
-                return sum(self._pdfs[0].xfxQ2(x, Q).values())
+                return sum(self._pdfs[0].xfxQ(x, Q).values())
 
         else:
 
