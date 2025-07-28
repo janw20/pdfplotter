@@ -517,6 +517,8 @@ class PDFSet:
         observable: sp.Basic | None = None,
         Q: float | Sequence[float] | npt.NDArray[np.floating] | None = None,
         Q2: float | Sequence[float] | npt.NDArray[np.floating] | None = None,
+        x_min: float = 1e-6,
+        x_max: float = 1.0,
         epsrel: float = 1e-6,
     ) -> (
         tuple[float, float] | tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]
@@ -552,7 +554,7 @@ class PDFSet:
         else:
 
             def integrand(x: np.floating, Q: np.floating) -> float:
-                values: dict[int, float] = self._pdfs[0].xfxQ2(x, Q)
+                values: dict[int, float] = self._pdfs[0].xfxQ(x, Q)
                 flavors = list(observable.free_symbols)
                 flavors_values = [values[pid_from_flavor[s]] for s in flavors]
                 return sp.lambdify(flavors, observable)(*flavors_values)
@@ -561,8 +563,8 @@ class PDFSet:
             (
                 integrate.quad(
                     lambda x: integrand(x, Q_i),
-                    0,
-                    1,
+                    x_min,
+                    x_max,
                     epsrel=epsrel,
                 )
                 for Q_i in np.atleast_1d(Q_flat)
