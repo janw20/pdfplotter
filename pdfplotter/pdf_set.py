@@ -8,6 +8,8 @@ import sympy as sp
 from matplotlib import pyplot as plt
 from typing_extensions import Any, Literal, Sequence
 
+import scipy.integrate as integrate
+
 from pdfplotter.flavors import flavors_nucleus, isospin_transform, pid_from_flavor
 from pdfplotter.util import update_kwargs
 
@@ -509,6 +511,68 @@ class PDFSet:
         return self.get_uncertainty(
             "+", observable, x, Q, Q2, ratio_to, convention
         ), self.get_uncertainty("-", observable, x, Q, Q2, ratio_to, convention)
+
+    def momentum(
+        self,
+        observable: sp.Basic | None = None,
+        Q: float | Sequence[float] | npt.NDArray[np.floating] | None = None,
+        Q2: float | Sequence[float] | npt.NDArray[np.floating] | None = None,
+        epsrel: float = 1e-6,
+    ) -> (
+        tuple[float, float] | tuple[npt.NDArray[np.floating], npt.NDArray[np.floating]]
+    ):
+        """Calculate the momentum of an observable, i.e. the integral `x × observable(x)`.
+
+        Parameters
+        ----------
+        observable : sympy.Basic, optional
+            The observable to calculate the momentum of, by default the sum of all flavors.
+        Q : numpy.ArrayLike, optional
+            The scale at which the momentum sum rule is calculated. Only one of `Q` or `Q2` must be given. By default None, which means that all values in `PDFSet.Q` are used.
+        Q2 : numpy.ArrayLike, optional
+            The squared scale at which the observable is calculated. Only one of `Q` or `Q2` must be given. By default None, which means that all values in `PDFSet.Q2` are used.
+
+        Returns
+        -------
+        numpy.ArrayLike
+            Momentum of the observable `observable` or of all flavors.
+        numpy.ArrayLike
+            Estimate of the absolute integration error as returned by `scipy.quad`.
+        """
+        _, Q_flat, shape = self._flatten_x_Q(1, Q, Q2)
+
+        if isinstance(Q_flat, slice):
+            Q_flat = self.Q
+
+        if observable is None:
+
+            def integrand(x: np.floating, Q: np.floating) -> float:
+                return sum(self._pdfs[0].xfxQ2(x, Q).values())
+
+        else:
+
+            def integrand(x: np.floating, Q: np.floating) -> float:
+                values: dict[int, float] = self._pdfs[0].xfxQ2(x, Q)
+                flavors = list(observable.free_symbols)
+                flavors_values = [values[pid_from_flavor[s]] for s in flavors]
+                return sp.lambdify(flavors, observable)(*flavors_values)
+
+        res = np.fromiter(
+            (
+                integrate.quad(
+                    lambda x: integrand(x, Q_i),
+                    0,
+                    1,
+                    epsrel=epsrel,
+                )
+                for Q_i in np.atleast_1d(Q_flat)
+            ),
+            dtype=np.dtype((float, 2)),
+        )
+        return (
+            np.reshape(res[:, 0], shape)[()],
+            np.reshape(res[:, 1], shape)[()],
+        )  # pyright: ignore[reportReturnType]
 
     def plot(
         self,
