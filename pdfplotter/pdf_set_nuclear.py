@@ -663,6 +663,7 @@ class NuclearPDFSet(PDFSet):
         Q2: float | None = None,
         A_lines: float | list[float] | None = None,
         offset: float = 1,
+        sub_tick_offset: float = 0.3,
         colors: list[str] | str | cycle = [],
         unc_conv: Literal["sym", "asym"] = "asym",
         labels_Bjx: Literal["colorbar", "legend", "none"] = "legend",
@@ -886,7 +887,7 @@ class NuclearPDFSet(PDFSet):
                         min(my_data[obs_m].query(f"x=={x_j}")["A"]),
                         max(my_data[obs_m].query(f"x=={x_j}")["A"]),
                     ],
-                    [j * offset + 1 - 0.3, j * offset + 1 - 0.3],
+                    [j * offset + 1 -  sub_tick_offset, j * offset + 1 -  sub_tick_offset],
                     linestyle="--",
                     color="grey",
                     linewidth=0.7,
@@ -896,7 +897,7 @@ class NuclearPDFSet(PDFSet):
                         min(my_data[obs_m].query(f"x=={x_j}")["A"]),
                         max(my_data[obs_m].query(f"x=={x_j}")["A"]),
                     ],
-                    [j * offset + 1 + 0.3, j * offset + 1 + 0.3],
+                    [j * offset + 1 +  sub_tick_offset, j * offset + 1 + sub_tick_offset],
                     linestyle="--",
                     color="grey",
                     linewidth=0.7,
@@ -996,8 +997,8 @@ class NuclearPDFSet(PDFSet):
                 locs = []
                 vals = []
                 for j in range(len(x)):
-                    locs += [j * offset + 1 - 0.3, j * offset + 1, j * offset + 1 + 0.3]
-                    vals += [0.7, 1, 1.3]
+                    locs += [j * offset + 1 - sub_tick_offset, j * offset + 1, j * offset + 1 + sub_tick_offset]
+                    vals += [1-sub_tick_offset, 1, 1+sub_tick_offset]
                 ax_m.set_yticks(locs, vals)
 
             if labels_Bjx == "legend":
