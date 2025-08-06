@@ -668,7 +668,7 @@ class NuclearPDFSet(PDFSet):
         labels_Bjx: Literal["colorbar", "legend", "none"] = "legend",
         logx: bool = True,
         title: str | list[str] | None = None,
-        plot_unc: bool = False,
+        plot_unc: bool | list[list[bool]] = False,
         ratio_to: PDFSet | None = None,
         pdf_label: Literal["ylabel", "annotate", "none"] | None = "annotate",
         plot_legend: bool = True,
@@ -764,6 +764,9 @@ class NuclearPDFSet(PDFSet):
         if not isinstance(observables, list):
             observables = [observables]
 
+        if not isinstance(plot_unc, list):
+            plot_unc=len(observables)*[plot_unc]
+
         if isinstance(colors, str):
             colors = len(x) * [colors]
 
@@ -843,8 +846,11 @@ class NuclearPDFSet(PDFSet):
             ax_m.set_ylim(0, float(len(x)) * offset + 0.3)
             if colors == []:
                 colors = cycle(plt.rcParams["axes.prop_cycle"].by_key()["color"])
-
             for j, (x_j, col) in enumerate(zip(x, colors)):
+
+                if not isinstance(plot_unc[m], list):
+                    plot_unc[m]=len(x)*[plot_unc[m]]
+
                 if isinstance(colors, str):
                     col = colors
                 elif isinstance(colors, list):
@@ -895,7 +901,9 @@ class NuclearPDFSet(PDFSet):
                     color="grey",
                     linewidth=0.7,
                 )
-                if plot_unc:
+                
+
+                if plot_unc[m][j]:
                     kwargs_uncertainty_default = {
                         "color": col,
                         "alpha": 0.2,
