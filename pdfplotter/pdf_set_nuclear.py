@@ -1,13 +1,18 @@
 from __future__ import annotations
 
-from itertools import zip_longest
-from typing import Sequence
+from itertools import cycle, zip_longest
+from typing import Any, Literal, cast
 
+import matplotlib.pyplot as plt
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
+import sympy as sp
+from matplotlib.lines import Line2D
 
+from pdfplotter.elements import element_to_str
 from pdfplotter.pdf_set import PDFSet
+from pdfplotter.util import to_str, update_kwargs
 
 
 class NuclearPDFSet(PDFSet):
@@ -153,3 +158,485 @@ class NuclearPDFSet(PDFSet):
                 raise ValueError(f"Multiple PDFSets found for Z = {Z}")
             else:
                 return pdf_set.iloc[0]["pdf_set"]
+
+    def plot_A_dep(
+        self,
+        ax: plt.Axes | npt.NDArray[plt.Axes],  # pyright: ignore[reportInvalidTypeForm]
+        observable: sp.Basic | list[sp.Basic],
+        A: list[int | float] | None = None,
+        x: npt.ArrayLike | None = None,
+        Q: npt.ArrayLike | None = None,
+        Q2: npt.ArrayLike | None = None,
+        pdf_label: Literal["ylabel", "annotate"] = "ylabel",
+        legend: bool = True,
+        kwargs_central: dict[str, Any] | list[dict[str, Any] | None] = {},
+        kwargs_uncertainty: dict[str, Any] | list[dict[str, Any] | None] = {},
+        kwargs_uncertainty_edges: dict[str, Any] | list[dict[str, Any] | None] = {},
+        kwargs_annotation: dict[str, Any] | list[dict[str, Any] | None] = {},
+        kwargs_xlabel: dict[str, Any] = {},
+        kwargs_ylabel: dict[str, Any] = {},
+        kwargs_legend: dict[str, Any] = {},
+    ) -> None:
+        """Plot the A-dependence of this PDF set.
+
+        Parameters
+        ----------
+        ax : plt.Axes | npt.NDArray[plt.Axes]
+            The axes to plot on. If multiple axes are given, each observable is plotted on its own subplot, which means `ax.size` must be equal to `len(observable)`.
+        A : list[int  |  float] | None, optional
+            Values of A to plot, by default None. If None, all values of A that were loaded are used.
+        x : npt.ArrayLike | None, optional
+            Values of x at which the observables are plotted, by default None. If None, all values of x that were loaded are used.
+        Q : npt.ArrayLike | None, optional
+            Values of Q at which the observables are plotted, by default None. If None, all values of Q that were loaded are used. Only `Q` or `Q2` can be given, not both.
+        Q2 : npt.ArrayLike | None, optional
+            Values of Q^2 at which the observables are plotted, by default None. If None, all values of Q^2 that were loaded are used. Only `Q` or `Q2` can be given, not both.
+        pdf_label : Literal["ylabel", "annotate"], optional
+            If the label of the observable should be shown as a y-axis label or as an annotation, by default "ylabel".
+        legend : bool, optional
+            If the legend showing the plotted values for A should be shown, by default True.
+        kwargs_central : dict[str, Any] | list[dict[str, Any]  |  None], optional
+            Additional keyword arguments for the central PDF that should be passed to `plt.Axes.plot`, by default {}. If a list of keyword arguments is given, the i-th element is used for the i-th A value.
+        kwargs_uncertainty : dict[str, Any] | list[dict[str, Any]  |  None], optional
+            Additional keyword arguments for the PDF uncertainty band that should be passed to `plt.Axes.fill_between`, by default {}. If a list of keyword arguments is given, the i-th element is used for the i-th A value.
+        kwargs_uncertainty_edges : dict[str, Any] | list[dict[str, Any]  |  None], optional
+            Additional keyword arguments for the edges of the PDF uncertainty band that should be passed to `plt.Axes.plot`, by default {}. If a list of keyword arguments is given, the i-th element is used for the i-th A value.
+        kwargs_annotation : dict[str, Any] | list[dict[str, Any]  |  None], optional
+            Additional keyword arguments for the annotation of the observable that should be passed to `plt.Axes.annotate`, by default {}. These only have an effect if `pdf_label` is "annotate".
+        kwargs_xlabel : dict[str, Any], optional
+            Additional keyword arguments for the x-axis label that should be passed to `plt.Axes.set_xlabel`, by default {}.
+        kwargs_ylabel : dict[str, Any], optional
+            Additional keyword arguments for the y-axis label that should be passed to `plt.Axes.set_ylabel`, by default {}. These only have an effect if `pdf_label` is "ylabel".
+        kwargs_legend : dict[str, Any], optional
+            Additional keyword arguments for the legend that should be passed to `plt.Figure.legend`, by default {}. These only have an effect if `legend` is `True`.
+        """
+        if not isinstance(ax, np.ndarray):
+            ax = np.array([ax])
+
+        if not isinstance(observable, list):
+            observable = [observable]
+
+        if A is None:
+            A = list(self.pdf_sets["A"])
+        elif not isinstance(A, list):
+            A = [A]
+
+        # plot each observable on its own subplot
+        for obs_i, ax_i in zip(observable, ax.flat):
+            ax_i: plt.Axes
+
+            # get the colors from the default color cycle so individual colors for each A are overridable
+            colors = cycle(plt.rcParams["axes.prop_cycle"].by_key()["color"])
+
+            # we save the lines to add them to the legend in the end
+            lines = []
+
+            for i, A_i in enumerate(A):
+
+                pdf_set = self.get(A=A_i)
+                x_i = x if x is not None else pdf_set.x
+                Q_i = Q if Q is not None else pdf_set.Q
+
+                Q_i_label = None if isinstance(Q_i, np.ndarray) else cast(float, Q_i)
+
+                color = next(colors)
+
+                # plot the central PDF
+                kwargs_default = {
+                    "zorder": 15,
+                    "color": color,
+                }
+                kwargs = update_kwargs(
+                    kwargs_default,
+                    kwargs_central,
+                    i,
+                )
+                l = ax_i.plot(
+                    x_i,
+                    pdf_set.get_central(obs_i, Q=Q_i),
+                    label=f"$A = {A}$ ({element_to_str(A_i)})",
+                    **kwargs,
+                )
+                lines.append(l[0])
+
+                # plot the uncertainty band
+                kwargs_default = {
+                    "zorder": 15,
+                    "alpha": 0.3,
+                    "facecolor": color,
+                }
+                kwargs = update_kwargs(
+                    kwargs_default,
+                    kwargs_uncertainty,
+                    i,
+                )
+                ax_i.fill_between(
+                    x_i,
+                    *pdf_set.get_uncertainties(observable=obs_i, Q=Q_i),
+                    **kwargs,
+                )  # pyright: ignore[reportArgumentType]
+
+                # plot the edges of the uncertainty band
+                kwargs_default = {
+                    "zorder": 15,
+                    "color": color,
+                    "lw": 0.5,
+                }
+                kwargs = update_kwargs(
+                    kwargs_default,
+                    kwargs_uncertainty_edges,
+                    i,
+                )
+                ax_i.plot(
+                    x_i,
+                    pdf_set.get_uncertainty("+", obs_i, Q=Q_i),
+                    **kwargs,
+                )
+                ax_i.plot(
+                    x_i,
+                    pdf_set.get_uncertainty("-", obs_i, Q=Q_i),
+                    **kwargs,
+                )
+
+                ax_i.set_xscale("log")
+                ax_i.set_xlim(1e-5, 1)
+
+                if i == 0:
+                    # add the pdf_label as annotation ...
+                    if pdf_label == "annotate":
+                        kwargs_default = {
+                            "xy": (0.97, 0.95),
+                            "xycoords": "axes fraction",
+                            "va": "top",
+                            "ha": "right",
+                            "fontsize": 11,
+                            "bbox": dict(
+                                facecolor=(1, 1, 1),
+                                edgecolor=(0.8, 0.8, 0.8),
+                                lw=0.9,
+                                boxstyle="round,pad=0.2",
+                            ),
+                        }
+                        kwargs = update_kwargs(
+                            kwargs_default,
+                            kwargs_annotation,
+                            i,
+                        )
+                        ax_i.annotate(
+                            f"${to_str(obs_i, Q=Q_i_label)}$",
+                            **kwargs,
+                        )
+                    # ... or as ylabel
+                    elif pdf_label == "ylabel":
+                        ax_i.set_ylabel(
+                            f"${to_str(obs_i, Q=Q_i_label)}$", **kwargs_ylabel
+                        )
+
+                    ax_i.set_xlabel("$x$", **kwargs_xlabel)
+
+            # add the legend
+            if legend:
+                kwargs_default = {
+                    "loc": "upper left",
+                    "bbox_to_anchor": (0.63, 1.02),
+                }
+                kwargs = update_kwargs(
+                    kwargs_default,
+                    kwargs_legend,
+                )
+                ax_i.figure.legend(
+                    lines,
+                    [f"$A = {A_i}$ ({element_to_str(A_i)})" for A_i in A],
+                    **kwargs,
+                )
+
+    def plot_A_dep_pseudo_3d(
+        self,
+        ax: plt.Axes | npt.NDArray[plt.Axes],  # pyright: ignore[reportInvalidTypeForm]
+        observable: sp.Basic | list[sp.Basic],
+        A: list[int | float] | None = None,
+        x: npt.ArrayLike | None = None,
+        Q: npt.ArrayLike | None = None,
+        Q2: npt.ArrayLike | None = None,
+        offset: tuple[float, float] = (0.15, 0.1),
+        pdf_label: Literal["ylabel", "annotate"] = "ylabel",
+        legend: bool = True,
+        kwargs_central: dict[str, Any] | list[dict[str, Any] | None] = {},
+        kwargs_uncertainty: dict[str, Any] | list[dict[str, Any] | None] = {},
+        kwargs_uncertainty_edges: dict[str, Any] | list[dict[str, Any] | None] = {},
+        kwargs_spines: dict[str, Any] | list[dict[str, Any] | None] = {},
+        kwargs_annotation: dict[str, Any] = {},
+        kwargs_xlabel: dict[str, Any] = {},
+        kwargs_ylabel: dict[str, Any] = {},
+        kwargs_legend: dict[str, Any] = {},
+    ) -> None:
+        """Plot the A-dependence of this PDF set as a sheared 3D plot, i.e. using insets.
+
+        Parameters
+        ----------
+        ax : plt.Axes | npt.NDArray[plt.Axes]
+            The axes to plot on. If multiple axes are given, each observable is plotted on its own subplot, which means `ax.size` must be equal to `len(observable)`.
+        A : list[int  |  float] | None, optional
+            Values of A to plot, by default None. If None, all values of A that were loaded are used.
+        x : npt.ArrayLike | None, optional
+            Values of x at which the observables are plotted, by default None. If None, all values of x that were loaded are used.
+        Q : npt.ArrayLike | None, optional
+            Values of Q at which the observables are plotted, by default None. If None, all values of Q that were loaded are used. Only `Q` or `Q2` can be given, not both.
+        Q2 : npt.ArrayLike | None, optional
+            Values of Q^2 at which the observables are plotted, by default None. If None, all values of Q^2 that were loaded are used. Only `Q` or `Q2` can be given, not both.
+        offset : tuple[float, float], optional
+            Offset between the inset axes in axes fractions, by default (0.15, 0.1).
+        pdf_label : Literal["ylabel", "annotate"], optional
+            If the label of the observable should be shown as a y-axis label or as an annotation, by default "ylabel".
+        legend : bool, optional
+            If the legend showing the plotted values for A should be shown, by default True.
+        kwargs_central : dict[str, Any] | list[dict[str, Any]  |  None], optional
+            Additional keyword arguments for the central PDF that should be passed to `plt.Axes.plot`, by default {}. If a list of keyword arguments is given, the i-th element is used for the i-th A value.
+        kwargs_uncertainty : dict[str, Any] | list[dict[str, Any]  |  None], optional
+            Additional keyword arguments for the PDF uncertainty band that should be passed to `plt.Axes.fill_between`, by default {}. If a list of keyword arguments is given, the i-th element is used for the i-th A value.
+        kwargs_uncertainty_edges : dict[str, Any] | list[dict[str, Any]  |  None], optional
+            Additional keyword arguments for the edges of the PDF uncertainty band that should be passed to `plt.Axes.plot`, by default {}. If a list of keyword arguments is given, the i-th element is used for the i-th A value.
+        kwargs_spines : dict[str, Any] | list[dict[str, Any]  |  None], optional
+            Additional keyword arguments for the spines between the insets that should be passed to `matplotlib.lines.Line2D`, by default {}.
+        kwargs_annotation : dict[str, Any], optional
+            Additional keyword arguments for the annotation of the observable that should be passed to `plt.Axes.annotate`, by default {}. These only have an effect if `pdf_label` is "annotate".
+        kwargs_xlabel : dict[str, Any], optional
+            Additional keyword arguments for the x-axis label that should be passed to `plt.Axes.set_xlabel`, by default {}.
+        kwargs_ylabel : dict[str, Any], optional
+            Additional keyword arguments for the y-axis label that should be passed to `plt.Axes.set_ylabel`, by default {}. These only have an effect if `pdf_label` is "ylabel".
+        kwargs_legend : dict[str, Any], optional
+            Additional keyword arguments for the legend that should be passed to `plt.Figure.legend`, by default {}. These only have an effect if `legend` is `True`.
+        """
+        if not isinstance(ax, np.ndarray):
+            ax = np.array([ax])
+
+        if not isinstance(observable, list):
+            observable = [observable]
+
+        if A is None:
+            A = list(self.pdf_sets["A"])
+        elif not isinstance(A, list):
+            A = [A]
+
+        # plot each observable on its own subplot
+        for obs_i, ax_i in zip(observable, ax.flat):
+            ax_i: plt.Axes
+
+            # since we draw the spines manually, the y limits need to be the same for the insets. so we determine the upper limit from the maximum beforehand
+            ylim = (
+                0,
+                np.max(
+                    [
+                        self.get(A=A_i).get_uncertainty("+", obs_i, x=x, Q=Q, Q2=Q2)
+                        for A_i in A
+                    ]
+                ),
+            )
+
+            # get the colors from the default color cycle so individual colors for each A are overridable
+            colors = cycle(plt.rcParams["axes.prop_cycle"].by_key()["color"])
+
+            # we save the lines to add them to the legend in the end
+            lines = []
+
+            for i, A_i in enumerate(A):
+
+                # plot on insets in every but the first iteration
+                if i != 0:
+                    ax_old = ax_i
+                    ax_i = ax_old.inset_axes([*offset, 1, 1], zorder=10)
+                else:
+                    ax_old = None
+
+                pdf_set = self.get(A=A_i)
+                x_i = x if x is not None else pdf_set.x
+                Q_i = Q if Q is not None else pdf_set.Q
+
+                Q_i_label = None if isinstance(Q_i, np.ndarray) else cast(float, Q_i)
+
+                color = next(colors)
+
+                # plot the central PDF
+                kwargs_default = {
+                    "zorder": 15,
+                    "color": color,
+                }
+                kwargs = update_kwargs(
+                    kwargs_default,
+                    kwargs_central,
+                    i,
+                )
+                l = ax_i.plot(
+                    x_i,
+                    pdf_set.get_central(obs_i, Q=Q_i),
+                    label=f"$A = {A}$ ({element_to_str(A_i)})",
+                    **kwargs,
+                )
+                lines.append(l[0])
+
+                # plot the uncertainty band
+                kwargs_default = {
+                    "zorder": 15,
+                    "alpha": 0.3,
+                    "facecolor": color,
+                }
+                kwargs = update_kwargs(
+                    kwargs_default,
+                    kwargs_uncertainty,
+                    i,
+                )
+                ax_i.fill_between(
+                    x_i,
+                    *pdf_set.get_uncertainties(observable=obs_i, Q=Q_i),
+                    **kwargs,
+                )  # pyright: ignore[reportArgumentType]
+
+                # plot the edges of the uncertainty band
+                kwargs_default = {
+                    "zorder": 15,
+                    "color": color,
+                    "lw": 0.5,
+                }
+                kwargs = update_kwargs(
+                    kwargs_default,
+                    kwargs_uncertainty_edges,
+                    i,
+                )
+                ax_i.plot(
+                    x_i,
+                    pdf_set.get_uncertainty("+", obs_i, Q=Q_i),
+                    **kwargs,
+                )
+                ax_i.plot(
+                    x_i,
+                    pdf_set.get_uncertainty("-", obs_i, Q=Q_i),
+                    **kwargs,
+                )
+
+                # hide top and right spines because they are in the way of the inset
+                ax_i.spines["top"].set(visible=False)
+                ax_i.spines["right"].set(visible=False)
+
+                ax_i.set_xscale("log")
+                ax_i.set_xlim(1e-5, 1)
+                ax_i.set_ylim(*ylim)  # pyright: ignore[reportArgumentType]
+
+                if i != 0:
+                    assert ax_old is not None
+
+                    kwargs_default = {
+                        "zorder": -1,
+                        "color": "gray",
+                        "lw": 0.5,
+                    }
+                    kwargs = update_kwargs(
+                        kwargs_default,
+                        kwargs_spines,
+                        i,
+                    )
+
+                    # draw the spines through the y ticks
+                    for t in ax_old.get_yticks():
+                        # transform the y tick to the y axis coordinates so that `offset` is in axis coordinates
+                        # fmt: off
+                        t_l = (ax_old.transScale + ax_old.transLimits).transform(  # pyright: ignore[reportAttributeAccessIssue]
+                            [0, t]
+                        )[1]
+                        # fmt: on
+
+                        # if the tick is not on the axis just leave it out
+                        if t_l < 0 or t_l > 1:
+                            continue
+
+                        # add the ticks as lines
+                        ax_old.add_artist(
+                            Line2D(
+                                [0, offset[0]],
+                                [t_l, offset[1] + t_l],
+                                transform=ax_old.transAxes,
+                                figure=ax_old.figure,
+                                clip_on=False,
+                                **kwargs,
+                            )
+                        )
+
+                    for t in ax_old.get_xticks():
+                        # transform the x tick to the x axis coordinates so that `offset` is in axis coordinates
+                        # fmt: off
+                        t_l = (ax_old.transScale + ax_old.transLimits).transform(  # pyright: ignore[reportAttributeAccessIssue]
+                            [t, 0]
+                        )[0]
+                        # fmt: on
+
+                        # if the tick is not on the axis just leave it out
+                        if t_l < 0 or t_l > 1:
+                            continue
+
+                        # add the ticks as lines
+                        ax_old.add_artist(
+                            Line2D(
+                                [t_l, offset[0] + t_l],
+                                [0, offset[1]],
+                                transform=ax_old.transAxes,
+                                figure=ax_old.figure,
+                                **kwargs,
+                            )
+                        )
+
+                    ax_i.set_xticklabels([])
+                    ax_i.set_yticklabels([])
+
+                    # hide the axis patch so that the insets are visible
+                    # fmt: off
+                    ax_i.patch.set_alpha(0)  # pyright: ignore[reportAttributeAccessIssue]
+                    # fmt: on
+
+                    # add the ylabel as annotation
+                    if pdf_label == "annotate" and i == len(A) - 1:
+                        kwargs_default = {
+                            "xy": (0.05, 0.95),
+                            "xycoords": "axes fraction",
+                            "va": "top",
+                            "ha": "left",
+                            "fontsize": 11,
+                            "bbox": dict(
+                                facecolor=(1, 1, 1),
+                                edgecolor=(0.8, 0.8, 0.8),
+                                lw=0.9,
+                                boxstyle="round,pad=0.2",
+                            ),
+                        }
+                        kwargs = update_kwargs(
+                            kwargs_default,
+                            kwargs_annotation,
+                        )
+                        ax_i.annotate(
+                            f"${to_str(obs_i, Q=Q_i_label)}$",
+                            **kwargs,
+                        )
+
+                else:
+                    ax_i.set_xlabel("$x$", **kwargs_xlabel)
+                    ax_i.set_ylim(0)
+
+                    # add the ylabel
+                    if pdf_label == "ylabel":
+                        ax_i.set_ylabel(
+                            f"${to_str(obs_i, Q=Q_i_label)}$", **kwargs_ylabel
+                        )
+
+            # add the legend
+            if legend:
+                kwargs_default = {
+                    "loc": "upper left",
+                    "bbox_to_anchor": (0.63, 1.02),
+                }
+                kwargs = update_kwargs(
+                    kwargs_default,
+                    kwargs_legend,
+                )
+                ax_i.figure.legend(
+                    lines,
+                    [f"$A = {A_i}$ ({element_to_str(A_i)})" for A_i in A],
+                    **kwargs,
+                )
