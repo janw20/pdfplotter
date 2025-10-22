@@ -4,11 +4,10 @@ import lhapdf
 import numpy as np
 import numpy.typing as npt
 import pandas as pd
+import scipy.integrate as integrate
 import sympy as sp
 from matplotlib import pyplot as plt
 from typing_extensions import Any, Literal, Sequence
-
-import scipy.integrate as integrate
 
 from pdfplotter.flavors import flavors_nucleus, isospin_transform, pid_from_flavor
 from pdfplotter.util import update_kwargs
@@ -35,6 +34,7 @@ class PDFSet:
     _Z: int
     _construct_full_nuclear_pdfs: bool
     _confidence_level: float
+    _replicas_alternative: bool
     _uncertainty_type: str
     _num_errors: int
 
@@ -48,6 +48,7 @@ class PDFSet:
         Z=1,
         construct_full_nuclear_pdfs=False,
         confidence_level: float = 90,
+        replicas_alternative: bool = True,
     ) -> None:
         """Constructs a PDFSet object.
 
@@ -69,6 +70,8 @@ class PDFSet:
             True if full nuclear PDFs should be constructed using `xf^A = Z/A * xf^(p/A) + (A - Z)/A * xf^(n/A). Only use this if the LHAPDF set you are loading does not already load full nuclear PDFs. By default False.
         confidence_level : float, optional
             The confidence level in percent at which the uncertainties are calculated. By default 90.
+        replicas_alternative : bool, optional
+            If the LHAPDF should use an alternative convention when computing uncertaintes of type "replicas" (this alternative convention is used by NNPDF), by default True.
         """
         if Q is None:
             if Q2 is None:
@@ -102,6 +105,7 @@ class PDFSet:
         self._confidence_level = (
             confidence_level if confidence_level else self.pdf_set.errorConfLevel
         )
+        self._replicas_alternative = replicas_alternative
         self._uncertainty_type = self.pdf_set.errorType
 
         Q_values = np.atleast_1d(self._Q)
@@ -163,6 +167,11 @@ class PDFSet:
     def confidence_level(self) -> float:
         """The confidence level of the uncertainties."""
         return self._confidence_level
+
+    @property
+    def replicas_alternative(self) -> bool:
+        """If the LHAPDF should use an alternative convention when computing uncertaintes of type "replicas" (this alternative convention is used by NNPDF)"""
+        return self._replicas_alternative
 
     @property
     def uncertainty_type(self) -> str:
@@ -253,7 +262,7 @@ class PDFSet:
                     .set_index(["pdf_type", "Q", "x"])
                 )
             else:
-                self._observables[str(term)] = self._data[str(term)].unstack("member").apply(lambda x: self._pdf_set.uncertainty(x, cl=self.confidence_level), axis=1).apply(func=(lambda x: pd.Series([x.central, x.central + x.errplus, x.central - x.errminus, x.central + x.errsymm, x.central - x.errsymm], index=self._observables.index.get_level_values("pdf_type").unique()))).stack().reorder_levels(["pdf_type", "Q", "x"])  # type: ignore
+                self._observables[str(term)] = self._data[str(term)].unstack("member").apply(lambda x: self._pdf_set.uncertainty(x, cl=self.confidence_level, alternative=self.replicas_alternative), axis=1).apply(func=(lambda x: pd.Series([x.central, x.central + x.errplus, x.central - x.errminus, x.central + x.errsymm, x.central - x.errsymm], index=self._observables.index.get_level_values("pdf_type").unique()))).stack().reorder_levels(["pdf_type", "Q", "x"])  # type: ignore
 
     def _check_and_calculate_ratio(self, term: sp.Basic, denominator: "PDFSet") -> None:
         """Check if the ratio of the observable `term` is already stored in `_ratios` and calculates it if not.
@@ -282,7 +291,9 @@ class PDFSet:
                     .unstack("member")
                     .apply(
                         lambda x: self._pdf_set.uncertainty(
-                            x, cl=self.confidence_level
+                            x,
+                            cl=self.confidence_level,
+                            alternative=self.replicas_alternative,
                         ),
                         axis=1,
                     )
