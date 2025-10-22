@@ -130,6 +130,8 @@ class NuclearPDFSet(PDFSet):
             pdf_sets_dict,
         )
 
+        self._confidence_level=confidence_level
+
     @property
     def pdf_sets(self) -> pd.DataFrame:
         """The `PDFSet` objects"""
@@ -670,7 +672,8 @@ class NuclearPDFSet(PDFSet):
         logx: bool = True,
         title: str | list[str] | None = None,
         plot_unc: bool | list[list[bool]] = False,
-        ratio_to: PDFSet | None = None,
+        #ratio_to: PDFSet | None = None,
+        ratio_to: str | None=None,
         pdf_label: Literal["ylabel", "annotate", "none"] | None = "annotate",
         plot_legend: bool = True,
         kwargs_theory: dict[str, Any] | list[dict[str, Any] | None] = {},
@@ -783,12 +786,16 @@ class NuclearPDFSet(PDFSet):
             list_unc1 = []
             list_unc2 = []
             list_A = []
-            for A in my_sets["A"]:
+            for A, Z in zip(my_sets["A"], my_sets["Z"]):
+                if ratio_to:
+                    ratio_to_pdf=PDFSet(x=np.array(x), Q=Q, Q2=Q2, name=ratio_to, A=A, Z=Z, construct_full_nuclear_pdfs=True, confidence_level=self.confidence_level)
+                else:
+                    ratio_to_pdf=None
                 for x_i in self.get(A=A).x:
                     list_x.append(x_i)
                     list_central.append(
                         self.get(A=A).get_central(
-                            x=x_i, Q=Q, Q2=Q2, observable=obs, ratio_to=ratio_to
+                            x=x_i, Q=Q, Q2=Q2, observable=obs, ratio_to=ratio_to_pdf
                         )
                     )
                     unc1 = self.get(A=A).get_uncertainties(
@@ -796,7 +803,7 @@ class NuclearPDFSet(PDFSet):
                         Q=Q,
                         Q2=Q2,
                         observable=obs,
-                        ratio_to=ratio_to,
+                        ratio_to=ratio_to_pdf,
                         convention=unc_conv,
                     )[0]
                     unc2 = self.get(A=A).get_uncertainties(
@@ -804,13 +811,13 @@ class NuclearPDFSet(PDFSet):
                         Q=Q,
                         Q2=Q2,
                         observable=obs,
-                        ratio_to=ratio_to,
+                        ratio_to=ratio_to_pdf,
                         convention=unc_conv,
                     )[1]
                     if math.isnan(unc1):
                         list_unc1.append(
                             self.get(A=A).get_central(
-                                x=x_i, Q=Q, Q2=Q2, observable=obs, ratio_to=ratio_to
+                                x=x_i, Q=Q, Q2=Q2, observable=obs, ratio_to=ratio_to_pdf
                             )
                         )
                     else:
@@ -818,7 +825,7 @@ class NuclearPDFSet(PDFSet):
                     if math.isnan(unc2):
                         list_unc2.append(
                             self.get(A=A).get_central(
-                                x=x_i, Q=Q, Q2=Q2, observable=obs, ratio_to=ratio_to
+                                x=x_i, Q=Q, Q2=Q2, observable=obs, ratio_to=ratio_to_pdf
                             )
                         )
                     else:
