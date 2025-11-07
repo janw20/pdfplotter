@@ -352,6 +352,7 @@ class PDFSet:
         x: float | Sequence[float] | npt.NDArray[np.floating] | None = None,
         Q: float | Sequence[float] | npt.NDArray[np.floating] | None = None,
         Q2: float | Sequence[float] | npt.NDArray[np.floating] | None = None,
+        allow_slice: bool = True,
     ) -> tuple[
         np.floating | npt.NDArray[np.floating] | slice,
         np.floating | npt.NDArray[np.floating] | slice,
@@ -361,7 +362,7 @@ class PDFSet:
         Q_flat: np.floating | npt.NDArray[np.floating] | slice
 
         if x is None:
-            x_flat = idx[:]
+            x_flat = idx[:] if allow_slice else self.x.flatten()
             shape_x = self.x.shape
         else:
             x_flat = np.array(x)
@@ -369,7 +370,7 @@ class PDFSet:
             x_flat = x_flat.flatten()[()]
 
         if Q is None and Q2 is None:
-            Q_flat = idx[:]
+            Q_flat = idx[:] if allow_slice else self.Q.flatten()
             shape_Q = self.Q.shape
         elif Q is None and Q2 is not None:
             Q_flat = np.sqrt(Q2)
