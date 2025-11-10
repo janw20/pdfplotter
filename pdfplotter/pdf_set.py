@@ -7,10 +7,19 @@ import pandas as pd
 import scipy.integrate as integrate
 import sympy as sp
 from matplotlib import pyplot as plt
+from matplotlib.collections import PolyCollection
+from matplotlib.lines import Line2D
 from typing_extensions import Any, Literal, Sequence
 
-from pdfplotter.flavors import flavors_nucleus, isospin_transform, pid_from_flavor
-from pdfplotter.util import update_kwargs
+from pdfplotter.elements import element_to_str
+from pdfplotter.flavors import (
+    d_v,
+    flavors_nucleus,
+    isospin_transform,
+    pid_from_flavor,
+    u_v,
+)
+from pdfplotter.util import to_str, update_kwargs
 
 idx = pd.IndexSlice
 
@@ -601,10 +610,17 @@ class PDFSet:
         central: bool = True,
         uncertainty: bool = True,
         uncertainty_edges: bool = True,
+        ratio_one: bool = True,
+        annotate_observable: bool = True,
+        annotate_observable_Q2: bool = True,
+        clip: float | None = None,
         kwargs_central: dict[str, Any] = {},
         kwargs_uncertainty: dict[str, Any] = {},
         kwargs_uncertainty_edges: dict[str, Any] = {},
-    ) -> None:
+        kwargs_ratio_one: dict[str, Any] = {},
+        kwargs_annotate_observable: dict[str, Any] = {},
+        kwargs_observable_to_str: dict[str, Any] = {},
+    ) -> tuple[Line2D | None, PolyCollection | None, Line2D | None]:
         """Plots an observable of this PDF set.
 
         Parameters
@@ -631,12 +647,26 @@ class PDFSet:
             Whether to plot the uncertainty band, by default True
         uncertainty_edges : bool, optional
             Whether to plot edges around the uncertainty band, by default True
+        ratio_one : bool, optional
+            Whether to show a horizontal line at 1 in ratio plots, by default True
+        annotate_observable : bool, optional
+            Whether to add the observable as an annotation, by default True
+        annotate_observable_Q2 : bool, optional
+            Whether Q2 is shown instead of Q in the annotation of the observable, by default True
+        clip : float | tuple[float, float] | None, optional
+            Value(s) on the y axis at which the uncertainty bands will be clipped, by default None. This prevents the uncertainty bands not showing up on some PDF renderers when they get very large
         kwargs_central : dict[str, Any], optional
             Additional keyword arguments for the central PDF that should be passed to `plt.Axes.plot`, by default {}
         kwargs_uncertainty : dict[str, Any], optional
             Additional keyword arguments for the PDF uncertainty band that should be passed to `plt.Axes.fill_between`, by default {}
         kwargs_uncertainty_edges : dict[str, Any], optional
             Additional keyword arguments for the edges of the PDF uncertainty band that should be passed to `plt.Axes.plot`, by default {}
+        kwargs_ratio_one : dict[str, Any], optional
+            Additional keyword arguments for the horizontal line at 1 that should be passed to `plt.Axes.axhline`, by default {}
+        kwargs_annotate_observable : dict[str, Any], optional
+            Additional keyword arguments for the annotation of the observable that should be passed to `plt.Axes.annotate`, by default {}
+        kwargs_observable_to_str : dict[str, Any], optional
+            Additional keyword arguments for the annotation of the observable that should be passed to `pp.to_str`, by default {}
         """
         if variable == "x":
             variable_values = x if x is not None else self.x
@@ -647,15 +677,30 @@ class PDFSet:
         else:
             raise ValueError("variable must be either 'x', 'Q' or 'Q2'")
 
+        if ratio_one and ratio_to is not None:
+            kwargs_ratio_one_default = dict(
+                y=1, color="black", lw=0.8, zorder=1.1, ls=(0, (5, 5))
+            )
+            kwargs_ratio_one_updated = update_kwargs(
+                kwargs_ratio_one_default, kwargs_ratio_one
+            )
+
+            ax.axhline(**kwargs_ratio_one_updated)
+
         if central:
-            kwargs_default = {}
+            kwargs_default = dict(lw=1.3)
             kwargs = update_kwargs(kwargs_default, kwargs_central)
+
+            pdf_central = self.get_central(
+                observable=observable, x=x, Q=Q, Q2=Q2, ratio_to=ratio_to
+            )
+
+            if clip is not None:
+                pdf_central = pdf_central.clip(-clip, clip)
 
             l = ax.plot(
                 variable_values,
-                self.get_central(
-                    observable=observable, x=x, Q=Q, Q2=Q2, ratio_to=ratio_to
-                ),
+                pdf_central,
                 **kwargs,
             )[0]
         else:
@@ -675,18 +720,27 @@ class PDFSet:
             } | kwargs_from_central
             kwargs = update_kwargs(kwargs_default, kwargs_uncertainty)
 
-            ax.fill_between(
+            pdf_uncertainties = self.get_uncertainties(
+                observable=observable,
+                x=x,
+                Q=Q,
+                Q2=Q2,
+                ratio_to=ratio_to,
+                convention=uncertainty_convention,
+            )
+
+            if clip is not None:
+                pdf_uncertainties = tuple(
+                    map(lambda x: np.clip(x, -clip, clip), pdf_uncertainties)
+                )
+
+            p = ax.fill_between(
                 variable_values,
-                *self.get_uncertainties(
-                    observable=observable,
-                    x=x,
-                    Q=Q,
-                    Q2=Q2,
-                    ratio_to=ratio_to,
-                    convention=uncertainty_convention,
-                ),  # pyright: ignore[reportArgumentType]
+                *pdf_uncertainties,  # pyright: ignore[reportArgumentType]
                 **kwargs,
             )
+        else:
+            p = None
 
         if uncertainty_edges:
             kwargs_from_central = (
@@ -702,29 +756,93 @@ class PDFSet:
             } | kwargs_from_central
             kwargs = update_kwargs(kwargs_default, kwargs_uncertainty_edges)
 
+            pdf_uncertainty_upper = self.get_uncertainty(
+                "+",
+                observable=observable,
+                x=x,
+                Q=Q,
+                Q2=Q2,
+                ratio_to=ratio_to,
+                convention=uncertainty_convention,
+            )
+
+            pdf_uncertainty_lower = self.get_uncertainty(
+                "-",
+                observable=observable,
+                x=x,
+                Q=Q,
+                Q2=Q2,
+                ratio_to=ratio_to,
+                convention=uncertainty_convention,
+            )
+
+            if clip is not None:
+                pdf_uncertainty_upper = pdf_uncertainty_upper.clip(-clip, clip)
+                pdf_uncertainty_lower = pdf_uncertainty_lower.clip(-clip, clip)
+
+            l_u = ax.plot(
+                variable_values,
+                pdf_uncertainty_upper,
+                **kwargs,
+            )[0]
             ax.plot(
                 variable_values,
-                self.get_uncertainty(
-                    "+",
-                    observable=observable,
-                    x=x,
-                    Q=Q,
-                    Q2=Q2,
-                    ratio_to=ratio_to,
-                    convention=uncertainty_convention,
-                ),
+                pdf_uncertainty_lower,
                 **kwargs,
             )
-            ax.plot(
-                variable_values,
-                self.get_uncertainty(
-                    "-",
-                    observable=observable,
-                    x=x,
-                    Q=Q,
-                    Q2=Q2,
-                    ratio_to=ratio_to,
-                    convention=uncertainty_convention,
-                ),
-                **kwargs,
+        else:
+            l_u = None
+
+        if annotate_observable:
+            kwargs_observable_to_str_default: dict[str, Any] = {
+                "observable": observable,
+                "nucleus": element_to_str(Z=self.Z),
+                "R": ratio_to is not None,
+            }
+
+            if variable == "x":
+                if annotate_observable_Q2:
+                    kwargs_observable_to_str_default["Q2"] = (
+                        Q2 if Q2 is not None else self.Q2
+                    )
+                else:
+                    kwargs_observable_to_str_default["Q"] = (
+                        Q if Q is not None else self.Q
+                    )
+            elif variable == "Q" or variable == "Q2":
+                kwargs_observable_to_str_default["x"] = x if x is not None else self.x
+
+            kwargs_observable_to_str_updated = update_kwargs(
+                kwargs_observable_to_str_default, kwargs_observable_to_str
             )
+
+            kwargs_annotate_observable_default: dict[str, Any] = dict(
+                text=f"${to_str(**kwargs_observable_to_str_updated)}$",
+                xy=(
+                    (0.035, 0.96)
+                    if observable in [u_v, d_v] or ratio_to is not None
+                    else (0.97, 0.96)
+                ),
+                xycoords="axes fraction",
+                va="top",
+                ha=(
+                    "left"
+                    if observable in [u_v, d_v] or ratio_to is not None
+                    else "right"
+                ),
+                # fontsize=11,
+                bbox=dict(
+                    facecolor=(1, 1, 1),
+                    edgecolor=(0.8, 0.8, 0.8),
+                    lw=0.9,
+                    boxstyle="round,pad=0.2",
+                ),
+            )
+
+            kwargs_annotate_observable_updated = update_kwargs(
+                kwargs_annotate_observable_default, kwargs_annotate_observable
+            )
+
+            ax.annotate(**kwargs_annotate_observable_updated)
+
+        return l, p, l_u
