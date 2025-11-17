@@ -20,6 +20,7 @@ from pdfplotter.flavors import (
     u_v,
 )
 from pdfplotter.util import to_str, update_kwargs
+from pdfplotter.pdf_ratio import PDFRatioPrescription, get_ratio_prescription
 
 idx = pd.IndexSlice
 
@@ -44,6 +45,7 @@ class PDFSet:
     _construct_full_nuclear_pdfs: bool
     _confidence_level: float
     _replicas_alternative: bool
+    _ratio_prescription: PDFRatioPrescription
     _uncertainty_type: str
     _num_errors: int
 
@@ -58,6 +60,7 @@ class PDFSet:
         construct_full_nuclear_pdfs=False,
         confidence_level: float = 90,
         replicas_alternative: bool = True,
+        ratio_prescription: PDFRatioPrescription | None = None,
     ) -> None:
         """Constructs a PDFSet object.
 
@@ -116,6 +119,11 @@ class PDFSet:
         )
         self._replicas_alternative = replicas_alternative
         self._uncertainty_type = self.pdf_set.errorType
+        self._ratio_prescription = (
+            ratio_prescription
+            if ratio_prescription is not None
+            else get_ratio_prescription(name)
+        )
 
         Q_values = np.atleast_1d(self._Q)
         x_values = np.atleast_1d(self._x)
@@ -181,6 +189,11 @@ class PDFSet:
     def replicas_alternative(self) -> bool:
         """If the LHAPDF should use an alternative convention when computing uncertaintes of type "replicas" (this alternative convention is used by NNPDF)"""
         return self._replicas_alternative
+
+    @property
+    def ratio_prescription(self) -> PDFRatioPrescription:
+        """The prescription for calculating ratios with this PDF set in the numerator"""
+        return self._ratio_prescription
 
     @property
     def uncertainty_type(self) -> str:
@@ -271,32 +284,8 @@ class PDFSet:
                     .set_index(["pdf_type", "Q", "x"])
                 )
             else:
-                self._observables[str(term)] = self._data[str(term)].unstack("member").apply(lambda x: self._pdf_set.uncertainty(x, cl=self.confidence_level, alternative=self.replicas_alternative), axis=1).apply(func=(lambda x: pd.Series([x.central, x.central + x.errplus, x.central - x.errminus, x.central + x.errsymm, x.central - x.errsymm], index=self._observables.index.get_level_values("pdf_type").unique()))).stack().reorder_levels(["pdf_type", "Q", "x"])  # type: ignore
-
-    def _check_and_calculate_ratio(self, term: sp.Basic, denominator: "PDFSet") -> None:
-        """Check if the ratio of the observable `term` is already stored in `_ratios` and calculates it if not.
-
-        Parameters
-        ----------
-        term : sympy.Basic
-            The observable to calculate the ratio of.
-        denominator : PDFSet, optional
-            The PDF set of which the observable `term` in the denominator is taken of, by default None.
-        """
-
-        if (
-            denominator
-            and not str(term) + " " + denominator.name in self._ratios.columns
-        ):
-            self._check_and_calculate_observable(term)
-            denominator._check_and_calculate_observable(term)
-
-            if (
-                self.uncertainty_type == "replicas"
-                and denominator.uncertainty_type == "replicas"
-            ):
-                self._ratios[str(term) + " " + denominator.name] = (
-                    (self._data[str(term)] / denominator._data[str(term)])
+                self._observables[str(term)] = (
+                    self._data[str(term)]
                     .unstack("member")
                     .apply(
                         lambda x: self._pdf_set.uncertainty(
@@ -316,7 +305,7 @@ class PDFSet:
                                     x.central + x.errsymm,
                                     x.central - x.errsymm,
                                 ],
-                                index=self._ratios.index.get_level_values(
+                                index=self._observables.index.get_level_values(
                                     "pdf_type"
                                 ).unique(),
                             )
@@ -325,36 +314,64 @@ class PDFSet:
                     .stack()
                     .reorder_levels(["pdf_type", "Q", "x"])
                 )
-            else:
-                self._ratios[str(term) + " " + denominator.name] = (
-                    self._data[str(term)]
-                    .unstack("member")
-                    .divide(denominator._data.loc[:, 0, :][str(term)], axis=0)
-                    .apply(
-                        lambda x: self._pdf_set.uncertainty(
-                            x, cl=self.confidence_level
+
+    def _check_and_calculate_ratio(self, term: sp.Basic, denominator: "PDFSet") -> None:
+        """Check if the ratio of the observable `term` is already stored in `_ratios` and calculates it if not.
+
+        Parameters
+        ----------
+        term : sympy.Basic
+            The observable to calculate the ratio of.
+        denominator : PDFSet, optional
+            The PDF set of which the observable `term` in the denominator is taken of, by default None.
+        """
+
+        if (
+            denominator
+            and not str(term) + " " + denominator.name in self._ratios.columns
+        ):
+            self._check_and_calculate_observable(term)
+            denominator._check_and_calculate_observable(term)
+
+            self._ratios[str(term) + " " + denominator.name] = (
+                self._data[str(term)]
+                .unstack("member")
+                .join(
+                    denominator._data[(str(term))].unstack("member"),
+                    lsuffix="_n",
+                    rsuffix="_d",
+                )
+                .apply(
+                    lambda x: self._pdf_set.uncertainty(
+                        self.ratio_prescription.calculate_ratio(
+                            x.to_numpy()[: self.num_errors + 1],
+                            x.to_numpy()[self.num_errors + 1 :],
+                            denominator.name,
                         ),
-                        axis=1,
-                    )
-                    .apply(
-                        func=(
-                            lambda x: pd.Series(
-                                [
-                                    x.central,
-                                    x.central + x.errplus,
-                                    x.central - x.errminus,
-                                    x.central + x.errsymm,
-                                    x.central - x.errsymm,
-                                ],
-                                index=self._ratios.index.get_level_values(
-                                    "pdf_type"
-                                ).unique(),
-                            )
+                        cl=self.confidence_level,
+                        alternative=self.replicas_alternative,
+                    ),
+                    axis=1,
+                )
+                .apply(
+                    func=(
+                        lambda x: pd.Series(
+                            [
+                                x.central,
+                                x.central + x.errplus,
+                                x.central - x.errminus,
+                                x.central + x.errsymm,
+                                x.central - x.errsymm,
+                            ],
+                            index=self._ratios.index.get_level_values(
+                                "pdf_type"
+                            ).unique(),
                         )
                     )
-                    .stack()
-                    .reorder_levels(["pdf_type", "Q", "x"])
                 )
+                .stack()
+                .reorder_levels(["pdf_type", "Q", "x"])
+            )
 
     def _flatten_x_Q(
         self,
