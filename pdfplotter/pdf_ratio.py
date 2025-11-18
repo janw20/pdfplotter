@@ -55,7 +55,7 @@ class PDFRatioPrescription(ABC):
 
 class PDFRatioPrescription_EPPS16(PDFRatioPrescription):
 
-    pattern = re.compile(r"^EPPS16nlo_CT14nlo_[A-Z][a-z][0-9]+$")
+    pattern = re.compile(r"^EPPS16nlo_CT14nlo_[A-Z][a-z]?[0-9]+$")
     """Regex pattern to match EPPS16 and EPPS21"""
 
     def matches(self, pdf_name: str) -> bool:
@@ -81,7 +81,7 @@ class PDFRatioPrescription_EPPS16(PDFRatioPrescription):
 
 class PDFRatioPrescription_EPPS21(PDFRatioPrescription):
 
-    pattern = re.compile(r"^EPPS21nlo_CT18Anlo_[A-Z][a-z][0-9]+$")
+    pattern = re.compile(r"^EPPS21nlo_CT18Anlo_[A-Z][a-z]?[0-9]+$")
     """Regex pattern to match EPPS16 and EPPS21"""
 
     def matches(self, pdf_name: str) -> bool:
@@ -130,7 +130,7 @@ class PDFRatioPrescription_nNNPDF30(PDFRatioPrescription):
 
 class PDFRatioPrescription_nNNPDF20(PDFRatioPrescription):
 
-    pattern = re.compile(rf"^nNNPDF20_nlo_as_0118_[A-Z]+[a-z]+[0-9]+$")
+    pattern = re.compile(r"^nNNPDF20_nlo_as_0118_[A-Z][a-z]?[0-9]+$")
     """Regex pattern to match nNNPDF20_nlo_as_0118"""
 
     def matches(self, pdf_name: str) -> bool:
