@@ -19,6 +19,9 @@ def to_str(
     upright_flavors: bool = True,
     replace_valence: bool = True,
     R: bool = False,
+    x_format: str = "{}",
+    Q_format: str = "{}",
+    Q2_format: str = "{}",
 ) -> str:
     """Converts an observable to a LaTeX string, e.g. for using in plotting labels.
 
@@ -130,15 +133,15 @@ def to_str(
 
     # add function suffix
     if function_suffix:
-        x_eq = f"x = {x}" if x is not None else "x"
+        x_eq = f"x = {x_format}".format(x) if x is not None else "x"
 
         if Q is not None and Q2 is not None:
             raise ValueError("Only one of Q or Q2 must be given")
 
         Q_eq = (
-            rf"Q = {Q}\,\mathrm{{GeV}}"
+            f"Q = {Q_format}".format(Q) + r"\,\mathrm{GeV}"
             if Q is not None
-            else rf"Q^2 = {Q2}\,\mathrm{{GeV}}^2" if Q2 is not None else "Q"
+            else f"Q^2 = {Q2_format}".format(Q2) + r"\,\mathrm{GeV}^2" if Q2 is not None else "Q"
         )
         xQ_suffix = rf"\left({x_eq}, {Q_eq}\right)"
 
