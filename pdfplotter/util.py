@@ -201,3 +201,15 @@ def update_kwargs(
         return kwargs
     else:
         raise ValueError("kwargs_user must be a dict or a list")
+
+def log_tick_formatter(val,pos=None):
+    return r"$10^{{{:.0f}}}$".format(val)
+
+def tick_formatter_exp_to_int(val,pos=None):
+    return r"${{{:.0f}}}$".format(val)
+
+def log_tick_formatter_sci(val,pos=None):
+    if val!=round(val,1):
+        return f"${val:.1e}$".format(val)
+    else:
+        return f"${val:.1f}$".format(val)
