@@ -1021,7 +1021,10 @@ class NuclearPDFSet(PDFSet):
                             kwargs_legend,
                         )
 
-                        ax_m.legend(**kwargs_legend)
+                        
+                        handles, labels= plt.gca().get_legend_handles_labels()
+
+                        ax_m.legend(handles[::-1], labels[::-1], **kwargs_legend)
 
             if pdf_label == "annotate":
                 if ratio_to != None:
