@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Any
+from typing_extensions import Any, Generator, Iterable, TypeVar
 
 import numpy as np
 import sympy as sp
@@ -141,7 +141,11 @@ def to_str(
         Q_eq = (
             f"Q = {Q_format}".format(Q) + r"\,\mathrm{GeV}"
             if Q is not None
-            else f"Q^2 = {Q2_format}".format(Q2) + r"\,\mathrm{GeV}^2" if Q2 is not None else "Q"
+            else (
+                f"Q^2 = {Q2_format}".format(Q2) + r"\,\mathrm{GeV}^2"
+                if Q2 is not None
+                else "Q"
+            )
         )
         xQ_suffix = rf"\left({x_eq}, {Q_eq}\right)"
 
@@ -201,3 +205,26 @@ def update_kwargs(
         return kwargs
     else:
         raise ValueError("kwargs_user must be a dict or a list")
+
+
+T = TypeVar("T")
+
+
+def unique(l: Iterable[T]) -> Generator[T]:
+    """Yield the unique elements of a 
+
+    Parameters
+    ----------
+    l : list[T]
+        _description_
+
+    Yields
+    ------
+    Generator[T]
+        _description_
+    """
+    seen = set()
+    for element in l:
+        if element not in seen:
+            seen.add(element)
+            yield element

@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import lhapdf
 import numpy as np
 import numpy.typing as npt
@@ -19,8 +21,8 @@ from pdfplotter.flavors import (
     pid_from_flavor,
     u_v,
 )
-from pdfplotter.util import to_str, update_kwargs
 from pdfplotter.pdf_ratio import PDFRatioPrescription, get_ratio_prescription
+from pdfplotter.util import to_str, unique, update_kwargs
 
 idx = pd.IndexSlice
 
@@ -29,6 +31,7 @@ class PDFSet:
     """Wrapper of the LHAPDF PDFSet class, including the calculation of observables, ratios, and their uncertainties."""
 
     _name: str
+    _path: Path
     _pdf_set: lhapdf.PDFSet
     _x: np.floating | npt.NDArray[np.floating]
     _Q: np.floating | npt.NDArray[np.floating]
@@ -67,7 +70,7 @@ class PDFSet:
         Parameters
         ----------
         name : str
-            The name of the LHAPDF set to load.
+            The name or path of the LHAPDF set to load. If only the name is given, the path to the parent directory of the PDF must be in $LHAPDF_DATA_PATH or lhapdf.paths().
         x : numpy.ArrayLike
             The momentum fraction values at which the PDFs are evaluated.
         Q : numpy.ArrayLike, optional
@@ -100,10 +103,22 @@ class PDFSet:
 
         if Z > A:
             raise ValueError("Z must be less than or equal to A")
-        self._name = name
 
-        # need to check ourselves if the PDF set is available, otherwise the notebook kernel crashes
-        if not name in lhapdf.availablePDFSets():
+        path = Path(name)
+        self._path = path
+        path_absolute = path.parent.resolve()
+
+        if not str(path_absolute) in lhapdf.paths():
+            lhapdf.pathsPrepend(str(path_absolute))
+
+        self._name = path.name
+
+        # need to check ourselves if the PDF set is available, otherwise the notebook kernel crashes,
+        # using lhapdf.availablePDFSets() is not possible since it caches the results
+        for p in unique(lhapdf.paths()):
+            if (Path(p) / path.name).exists():
+                break
+        else:
             raise FileNotFoundError(
                 f"PDF set {name} was not found or has missing info file"
             )
@@ -122,7 +137,7 @@ class PDFSet:
         self._ratio_prescription = (
             ratio_prescription
             if ratio_prescription is not None
-            else get_ratio_prescription(name)
+            else get_ratio_prescription(self.name)
         )
 
         Q_values = np.atleast_1d(self._Q)
@@ -149,6 +164,11 @@ class PDFSet:
     def name(self) -> str:
         """The name of the LHAPDF set."""
         return self._name
+
+    @property
+    def path(self) -> Path:
+        """The path of the LHAPDF set. This is only different from self.name when the PDFSet was loaded from a path."""
+        return self._path
 
     @property
     def pdf_set(self) -> lhapdf.PDFSet:
@@ -685,6 +705,8 @@ class PDFSet:
         kwargs_observable_to_str : dict[str, Any], optional
             Additional keyword arguments for the annotation of the observable that should be passed to `pp.to_str`, by default {}
         """
+        x_flat, Q_flat, shape = self._flatten_x_Q(x, Q, Q2, allow_slice=False)
+
         if variable == "x":
             variable_values = x if x is not None else self.x
         elif variable == "Q":
