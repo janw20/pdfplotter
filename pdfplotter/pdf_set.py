@@ -108,8 +108,8 @@ class PDFSet:
         self._path = path
         path_absolute = path.parent.resolve()
 
-        if not str(path_absolute) in lhapdf.paths():
-            lhapdf.pathsPrepend(str(path_absolute))
+        # we just always prepend instead of checking if the path is already there because this fixes the case where two PDF sets have the same name, but are in different directories
+        lhapdf.pathsPrepend(str(path_absolute))
 
         self._name = path.name
 
