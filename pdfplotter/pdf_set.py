@@ -353,45 +353,58 @@ class PDFSet:
             self._check_and_calculate_observable(term)
             denominator._check_and_calculate_observable(term)
 
-            self._ratios[str(term) + " " + denominator.name] = (
-                self._data[str(term)]
-                .unstack("member")
-                .join(
-                    denominator._data[(str(term))].unstack("member"),
-                    lsuffix="_n",
-                    rsuffix="_d",
-                )
-                .apply(
-                    lambda x: self._pdf_set.uncertainty(
-                        self.ratio_prescription.calculate_ratio(
-                            x.to_numpy()[: self.num_errors + 1],
-                            x.to_numpy()[self.num_errors + 1 :],
-                            denominator.name,
+            if self.num_errors > 0:
+                self._ratios[str(term) + " " + denominator.name] = (
+                    self._data[str(term)]
+                    .unstack("member")
+                    .join(
+                        denominator._data[(str(term))].unstack("member"),
+                        lsuffix="_n",
+                        rsuffix="_d",
+                    )
+                    .apply(
+                        lambda x: self._pdf_set.uncertainty(
+                            self.ratio_prescription.calculate_ratio(
+                                x.to_numpy()[: self.num_errors + 1],
+                                x.to_numpy()[self.num_errors + 1 :],
+                                denominator.name,
+                            ),
+                            cl=self.confidence_level,
+                            alternative=self.replicas_alternative,
                         ),
-                        cl=self.confidence_level,
-                        alternative=self.replicas_alternative,
-                    ),
-                    axis=1,
-                )
-                .apply(
-                    func=(
-                        lambda x: pd.Series(
-                            [
-                                x.central,
-                                x.central + x.errplus,
-                                x.central - x.errminus,
-                                x.central + x.errsymm,
-                                x.central - x.errsymm,
-                            ],
-                            index=self._ratios.index.get_level_values(
-                                "pdf_type"
-                            ).unique(),
+                        axis=1,
+                    )
+                    .apply(
+                        func=(
+                            lambda x: pd.Series(
+                                [
+                                    x.central,
+                                    x.central + x.errplus,
+                                    x.central - x.errminus,
+                                    x.central + x.errsymm,
+                                    x.central - x.errsymm,
+                                ],
+                                index=self._ratios.index.get_level_values(
+                                    "pdf_type"
+                                ).unique(),
+                            )
                         )
                     )
+                    .stack()
+                    .reorder_levels(["pdf_type", "Q", "x"])
                 )
-                .stack()
-                .reorder_levels(["pdf_type", "Q", "x"])
-            )
+            else:
+                # if the numerator PDFSet does not have errors, just divide the centrals
+                self._ratios.loc[
+                    idx["central", :, :], str(term) + " " + denominator.name
+                ] = (
+                    self._data.loc[idx[:, 0, :], str(term)]
+                    / denominator._data.loc[idx[:, 0, :], str(term)]
+                )
+                self._ratios.loc[
+                    idx[["unc_asym_+", "unc_asym_-", "unc_sym_+", "unc_sym_-"], :, :],
+                    str(term) + " " + denominator.name,
+                ] = np.nan
 
     def _flatten_x_Q(
         self,
