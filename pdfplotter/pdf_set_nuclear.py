@@ -26,6 +26,7 @@ class NuclearPDFSet(PDFSet):
         Z: int | float | list[int | float] = 1,
         construct_full_nuclear_pdfs: bool = False,
         confidence_level: float = 90,
+        replicas_alternative: bool = False,
     ) -> None:
         """Constructs a NuclearPDFSet object, wrapping multiple PDFSet objects for different values of A.
 
@@ -51,6 +52,8 @@ class NuclearPDFSet(PDFSet):
             True if full nuclear PDFs should be constructed using `xf^A = Z/A * xf^(p/A) + (A - Z)/A * xf^(n/A). Only use this if the LHAPDF set you are loading does not already load full nuclear PDFs. By default False.
         confidence_level : float, optional
             The confidence level in percent at which the uncertainties are calculated. By default 90.
+        replicas_alternative : bool, optional
+            If the LHAPDF should use an alternative convention when computing uncertaintes of type "replicas" (this alternative convention is used by NNPDF), by default False.
         """
 
         if names is None:
@@ -103,6 +106,7 @@ class NuclearPDFSet(PDFSet):
                         Z=Z_i,  # pyright: ignore[reportArgumentType]
                         construct_full_nuclear_pdfs=construct_full_nuclear_pdfs,
                         confidence_level=confidence_level,
+                        replicas_alternative=replicas_alternative, 
                     ),
                 }
             )
