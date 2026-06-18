@@ -26,7 +26,7 @@ class NuclearPDFSet(PDFSet):
         Z: int | float | list[int | float] = 1,
         construct_full_nuclear_pdfs: bool = False,
         confidence_level: float = 90,
-        replicas_alternative: bool = False
+        replicas_alternative: bool = False,
     ) -> None:
         """Constructs a NuclearPDFSet object, wrapping multiple PDFSet objects for different values of A.
 
