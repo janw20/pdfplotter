@@ -106,7 +106,7 @@ class NuclearPDFSet(PDFSet):
                         Z=Z_i,  # pyright: ignore[reportArgumentType]
                         construct_full_nuclear_pdfs=construct_full_nuclear_pdfs,
                         confidence_level=confidence_level,
-                        replicas_alternative = replicas_alternative 
+                        replicas_alternative = replicas_alternative, 
                     ),
                 }
             )
