@@ -62,7 +62,7 @@ class PDFSet:
         Z=1,
         construct_full_nuclear_pdfs=False,
         confidence_level: float = 90,
-        replicas_alternative: bool = True,
+        replicas_alternative: bool = False,
         ratio_prescription: PDFRatioPrescription | None = None,
     ) -> None:
         """Constructs a PDFSet object.
@@ -86,7 +86,7 @@ class PDFSet:
         confidence_level : float, optional
             The confidence level in percent at which the uncertainties are calculated. By default 90.
         replicas_alternative : bool, optional
-            If the LHAPDF should use an alternative convention when computing uncertaintes of type "replicas" (this alternative convention is used by NNPDF), by default True.
+            If the LHAPDF should use an alternative convention when computing uncertaintes of type "replicas" (this alternative convention is used by NNPDF), by default False.
         """
         if Q is None:
             if Q2 is None:
