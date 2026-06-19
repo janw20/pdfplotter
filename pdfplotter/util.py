@@ -211,7 +211,7 @@ T = TypeVar("T")
 
 
 def unique(l: Iterable[T]) -> Generator[T]:
-    """Yield the unique elements of a 
+    """Yield the unique elements of a
 
     Parameters
     ----------
@@ -228,3 +228,16 @@ def unique(l: Iterable[T]) -> Generator[T]:
         if element not in seen:
             seen.add(element)
             yield element
+
+
+def log_tick_formatter(val, pos=None):
+    return r"$10^{{{:.0f}}}$".format(val)
+
+def tick_formatter_exp_to_int(val,pos=None):
+    return r"${{{:.0f}}}$".format(val)
+
+def log_tick_formatter_sci(val,pos=None):
+    if val!=round(val,1):
+        return f"${val:.1e}$".format(val)
+    else:
+        return f"${val:.1f}$".format(val)
