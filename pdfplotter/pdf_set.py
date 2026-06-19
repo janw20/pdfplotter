@@ -13,7 +13,7 @@ from matplotlib.collections import PolyCollection
 from matplotlib.lines import Line2D
 from typing_extensions import Any, Literal, Sequence
 
-from pdfplotter.elements import element_to_str
+from pdfplotter.elements import nucleus_to_latex
 from pdfplotter.flavors import (
     d_v,
     flavors_nucleus,
@@ -848,7 +848,7 @@ class PDFSet:
         if annotate_observable:
             kwargs_observable_to_str_default: dict[str, Any] = {
                 "observable": observable,
-                "nucleus": element_to_str(Z=self.Z),
+                "nucleus": nucleus_to_latex(Z=self.Z),
                 "R": ratio_to is not None,
             }
 

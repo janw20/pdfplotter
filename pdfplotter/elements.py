@@ -6,8 +6,11 @@ import numpy as np
 import pandas as pd
 
 
-def element_to_str(
-    A: int | float | None = None, Z: int | float | None = None, long: bool = False
+def nucleus_to_latex(
+    Z: int | float | None = None,
+    A: int | float | None = None,
+    long: bool = False,
+    show_A: bool = False,
 ) -> str:
     """Convert atomic number and mass number to element symbol.
 
@@ -18,36 +21,55 @@ def element_to_str(
     Z : int | float | None, optional
         Atomic number of the element. By default None.
     long : bool, optional
-        If the name of the element should be returned instead of its name (e.g. "Lead" instead of "Pb"). By default False.
+        If the name of the element should be returned instead of its symbol (e.g. "Lead" instead of "Pb"). By default False.
+    show_A : bool, optional
+        If the element symbol includes the mass number, by default False.
 
     Returns
     -------
     str
         Symbol or name of the element.
     """
-    if A is not None:
-        if Z is not None:
-            raise ValueError("Please pass either A or Z, not both")
 
-        row = _elements.iloc[(_elements["AtomicMass"] - A).abs().argsort().iloc[0]]
-    elif Z is not None:
+    if Z is not None and A is not None:
+        if np.isnan(Z) and np.isnan(A) or np.isinf(Z) and np.isinf(A):
+            return "\\dots"
+
         row = _elements.iloc[
-            pd.Series(_elements.index.get_level_values("AtomicNumber") - Z)
+            (_elements[["AtomicNumber", "AtomicMass"]] - [Z, A])
             .abs()
-            .argsort()
-            .iloc[0]
+            .sort_values(by=["AtomicNumber", "AtomicMass"])
+            .index[0]
         ]
+    elif Z is not None and not np.isnan(Z):
+        row = _elements.iloc[(_elements["AtomicNumber"] - Z).abs().argsort().iloc[0]]
+    elif A is not None and not np.isnan(A):
+        row = _elements.iloc[(_elements["AtomicMass"] - A).abs().argsort().iloc[0]]
     else:
-        raise ValueError("Please pass either A or Z")
+        return ""
+
+    if show_A and not row["AtomicNumber"] == 1:
+        A_str = (
+            f"{round(A if A is not None and not np.isnan(A) else row['AtomicMass'])}"
+        )
+
+        if long:
+            A_str = f"-{A_str}"
+    else:
+        A_str = ""
 
     if long:
-        return row["Name"]
+        res = f"\\text{{{row["Name"]}{A_str}}}"
     else:
-        return row["Symbol"]
+        res = f"^{{{A_str}}}\\mathrm{{{row["Symbol"]}}}"
+
+    return res
 
 
 _elements_csv = """"AtomicNumber","Symbol","Name","AtomicMass"
+1,"p","Proton",1.0073
 1,"H","Hydrogen",1.0080
+1,"D","Deuterium",2.0141
 2,"He","Helium",4.00260
 3,"Li","Lithium",7.0
 4,"Be","Beryllium",9.012183
@@ -165,4 +187,4 @@ _elements_csv = """"AtomicNumber","Symbol","Name","AtomicMass"
 116,"Lv","Livermorium",293.205
 117,"Ts","Tennessine",294.211
 118,"Og","Oganesson",295.216 """
-_elements = pd.read_csv(StringIO(_elements_csv), index_col="AtomicNumber")
+_elements = pd.read_csv(StringIO(_elements_csv))
